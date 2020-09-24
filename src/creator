@@ -1,0 +1,31 @@
+#!/bin/bash
+
+params=$(echo "$1" | tr "," "\n")
+
+opcode=($(seq $2 $3 $4)) # | xargs printf "0x%02X => { ")
+
+name=$5
+
+func=$6
+
+
+index=0
+for i in $params
+do
+	printf "0x%02X // $(echo $name | sed "s/_/$i/g")\n" ${opcode[$index]}
+	if [[ $i == "(HL)" ]]; then
+		filled_func=$(echo $func | sed "s/self.R.getB('_')/self.R.readB(self.R.getW("\"HL\""), 0)/g" | sed "s/; 1/; 2/g")
+	else 
+		filled_func=$(echo $func | sed "s/_/$i/g")
+	fi
+
+	if [[ $i == "NZ" ]]; then
+		printf "0x%02X => { $filled_func },\n" ${opcode[$index]} | sed "s/self.getFlag(ALUFlag::N/\!self.getFlag(ALUFlag::/g"
+	elif [[ $i == "NC" ]]; then
+		printf "0x%02X => { $filled_func },\n" ${opcode[$index]} | sed "s/self.getFlag(ALUFlag::N/\!self.getFlag(ALUFlag::/g"
+	else
+		printf "0x%02X => { $filled_func },\n" ${opcode[$index]}
+	fi
+	index=$index+1
+done
+
