@@ -1,6 +1,7 @@
 mod cpu;
 mod register;
 mod instructions;
+mod instructions_cb;
 
 struct MotherBoard {
     cpu: cpu::CPU
