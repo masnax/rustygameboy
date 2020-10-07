@@ -1,69 +1,99 @@
-// $FFFF	Interrupt Enable Flag
-// $FF80-$FFFE	Zero Page - 127 bytes
-// $FF00-$FF7F	Hardware I/O Registers
-// $FEA0-$FEFF	Unusable Memory
-// $FE00-$FE9F	OAM - Object Attribute Memory
-// $E000-$FDFF	Echo RAM - Reserved, Do Not Use
-// $D000-$DFFF	Internal RAM - Bank 1-7 (switchable - CGB only)
-// $C000-$CFFF	Internal RAM - Bank 0 (fixed)
-// $A000-$BFFF	Cartridge RAM (If Available)
-// $9C00-$9FFF	BG Map Data 2
-// $9800-$9BFF	BG Map Data 1
-// $8000-$97FF	Character RAM
-// $4000-$7FFF	Cartridge ROM - Switchable Banks 1-xx
-// $0150-$3FFF	Cartridge ROM - Bank 0 (fixed)
-// $0100-$014F	Cartridge Header Area
-// $0000-$00FF	Restart and Interrupt Vectors
+use crate::cartridge::Cartridge;
 
-
-pub struct MemoryMap {
-    token: u8,
+pub struct Memory {
+    header: [u8; 0x150],
+    cartridge: Cartridge,
+    ram: [u8; 0xFFFF],
 }
 
 
-impl MemoryMap {
-    pub fn init() -> MemoryMap {
-        MemoryMap {
-            token: 0
-        }
+
+impl Memory {
+    pub fn init(boot_rom: [u8; 0x100], filename: &str) -> Memory {
+        let mut header: [u8; 0x150] = [0; 0x150];
+        header[..0x100].copy_from_slice(&boot_rom);
+        let cartridge: Cartridge = Cartridge::load(filename);
+        header[0x100..0x150].copy_from_slice(&cartridge.get_header()[..]);
+        let ram = [0; 0xFFFF];
+        Memory { header, cartridge, ram, }
     }
 
-    pub fn read_b(&self, addr: u16) -> u8 {
+
+    pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
+            // Boot ROM
             // Restart and Interrupt Vectors
-            0x0000 ..= 0x00FF => { 0 },
+            0x0000 ..= 0x00FF => { self.header[addr as usize] },
             // Cartridge Header Area
-            0x0100 ..= 0x014F => { 0 },
+            0x0100 ..= 0x014F => { self.header[addr as usize] },
             // Cartridge ROM - Bank 0 (fixed)
-            0x0150 ..= 0x3FFF => { 0 },
+            0x0150 ..= 0x3FFF => { self.cartridge.read(addr) },
             // Cartridge ROM - Switchable Banks 1-xx
-            0x4000 ..= 0x7FFF => { 0 },
+            0x4000 ..= 0x7FFF => { self.cartridge.read(addr) },
             // Character RAM
-            0x8000 ..= 0x97FF => { 0 },
-            // BG Map Data 1
-            0x9800 ..= 0x9BFF => { 0 },
-            // BG Map Data 2
-            0x9C00 ..= 0x9FFF => { 0 },
+            0x8000 ..= 0x97FF => { self.ram[addr as usize] },
+            // BG  Data 1
+            0x9800 ..= 0x9BFF => { self.ram[addr as usize] },
+            // BG  Data 2
+            0x9C00 ..= 0x9FFF => { self.ram[addr as usize] },
             // Cartridge RAM (If Available)
-            0xA000 ..= 0xBFFF => { 0 },
+            0xA000 ..= 0xBFFF => { self.cartridge.read(addr) },
             // Internal RAM - Bank 0 (fixed)
-            0xC000 ..= 0xCFFF => { 0 },
+            0xC000 ..= 0xCFFF => { self.ram[addr as usize] },
             // Internal RAM - Bank 1-7 (switchable - CGB only)
-            0xD000 ..= 0xDFFF => { 0 },
+            0xD000 ..= 0xDFFF => { self.ram[addr as usize] },
             // Echo RAM - Reserved, Do Not Use
             0xE000 ..= 0xFDFF => { 0 },
             // OAM - Object Attribute Memory
-            0xFE00 ..= 0xFE9F => { 0 },
+            0xFE00 ..= 0xFE9F => { self.ram[addr as usize] },
             // Unusable Memory
             0xFEA0 ..= 0xFEFF => { 0 },
             // Hardware I/O Registers
-            0xFF00 ..= 0xFF7F => { 0 },
+            0xFF00 ..= 0xFF7F => { self.ram[addr as usize] },
             // Zero Page - 127 bytes
-            0xFF80 ..= 0xFFFE => { 0 },
+            0xFF80 ..= 0xFFFE => { self.ram[addr as usize] },
             // Interrupt Enable Flag
-            0xFFFF => { 0 },
-            _ => { panic!("boo"); }
+            0xFFFF => { self.ram[addr as usize] }
+        }
+    }
+
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        match addr {
+            // Boot ROM
+            // Restart and Interrupt Vectors
+            0x0000 ..= 0x00FF => { self.header[addr as usize]; },
+            // Cartridge Header Area
+            0x0100 ..= 0x014F => { self.header[addr as usize]; },
+            // Cartridge ROM - Bank 0 (fixed)
+            0x0150 ..= 0x3FFF => { self.cartridge.read(addr); },
+            // Cartridge ROM - Switchable Banks 1-xx
+            0x4000 ..= 0x7FFF => { self.cartridge.read(addr); },
+            // Character RAM
+            0x8000 ..= 0x97FF => { self.ram[addr as usize]; },
+            // BG  Data 1
+            0x9800 ..= 0x9BFF => { self.ram[addr as usize]; },
+            // BG  Data 2
+            0x9C00 ..= 0x9FFF => { self.ram[addr as usize]; },
+            // Cartridge RAM (If Available)
+            0xA000 ..= 0xBFFF => { self.cartridge.read(addr); },
+            // Internal RAM - Bank 0 (fixed)
+            0xC000 ..= 0xCFFF => { self.ram[addr as usize]; },
+            // Internal RAM - Bank 1-7 (switchable - CGB only)
+            0xD000 ..= 0xDFFF => { self.ram[addr as usize]; },
+            // Echo RAM - Reserved, Do Not Use
+            0xE000 ..= 0xFDFF => { 0; },
+            // OAM - Object Attribute Memory
+            0xFE00 ..= 0xFE9F => { self.ram[addr as usize]; },
+            // Unusable Memory
+            0xFEA0 ..= 0xFEFF => { 0; },
+            // Hardware I/O Registers
+            0xFF00 ..= 0xFF7F => { self.ram[addr as usize]; },
+            // Zero Page - 127 bytes
+            0xFF80 ..= 0xFFFE => { self.ram[addr as usize]; },
+            // Interrupt Enable Flag
+            0xFFFF => { self.ram[addr as usize]; }
         }
     }
 
 }
+

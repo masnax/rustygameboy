@@ -89,26 +89,6 @@ impl Register {
         }
     }
 
-    pub fn write_word(&mut self, addr: u16, value: u16) {
-        println!("{:?} {:?}", addr, value);
-
-    }
-
-    pub fn write_byte(&mut self, addr: u16, value: u8) {
-        println!("{:?} {:?}", addr, value);
-
-    }
-
-    pub fn read_word(&self, addr: u16) -> u16 {
-        println!("{:?} {:?}", addr, addr);
-        return 0;
-    }
-
-    pub fn read_byte(&self, addr: u16) -> u8 {
-        println!("{:?} {:?}", addr, addr);
-        return 0;
-    }
-
     pub fn get_flag(&self, flag: ALUFlag) -> bool {
         let f = self.get_byte(REG::F);
         let flag_bits = flag as u8;
