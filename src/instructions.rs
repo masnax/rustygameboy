@@ -58,6 +58,14 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::H, (value & 0xF) + 1 > 0xF);
     }
 
+    pub fn inc_word(&mut self, id: REG) {
+        self.r.set_word(id, self.r.get_word(id).wrapping_add(1));
+    }
+
+    pub fn dec_word(&mut self, id: REG) {
+        self.r.set_word(id, self.r.get_word(id).wrapping_sub(1));
+    }
+
     pub fn dec(&mut self, id: REG) {
         let value: u8 = self.r.get_byte(id);
         let sub: u8 = value.wrapping_sub(1);
@@ -120,19 +128,42 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::H, (value & 0xF) == 0);
     }
 
-    pub fn add_word(&mut self, id: REG, value: u16) {
-        let previous: u16 = self.r.get_word(id);
+    pub fn add_word(&mut self, id1: REG, id2: REG) {
+        let previous: u16 = self.r.get_word(id1);
+        let value: u16 = self.r.get_word(id2);
         let add: u16 = previous.wrapping_add(value);
-        self.r.set_word(id, add);
+        self.r.set_word(id1, add);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, (previous & 0xFF) + (value & 0xFF) > 0xFF);
         self.r.update_flag(ALUFlag::C, previous > 0xFFFF - value);
     }
 
-    pub fn add_byte(&mut self, id: REG, value: u8) {
+    pub fn add_byte_mem(&mut self, id1: REG, id2: REG) {
+        let previous: u8 = self.r.get_byte(id1);
+        let value: u8 = self.m.read_byte(self.r.get_word(id2));
+        let add: u8 = previous.wrapping_add(value);
+        self.r.set_byte(id1, add);
+        self.r.update_flag(ALUFlag::Z, add == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, (previous & 0xF) + (value & 0xF) > 0xF);
+        self.r.update_flag(ALUFlag::C, previous > 0xFF - value);
+    }
+
+    pub fn add(&mut self, id: REG, value: u8) {
         let previous: u8 = self.r.get_byte(id);
         let add: u8 = previous.wrapping_add(value);
         self.r.set_byte(id, add);
+        self.r.update_flag(ALUFlag::Z, add == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, (previous & 0xF) + (value & 0xF) > 0xF);
+        self.r.update_flag(ALUFlag::C, previous > 0xFF - value);
+    }
+
+    pub fn add_byte(&mut self, id1: REG, id2: REG) {
+        let previous: u8 = self.r.get_byte(id1);
+        let value: u8 = self.r.get_byte(id2);
+        let add: u8 = previous.wrapping_add(value);
+        self.r.set_byte(id1, add);
         self.r.update_flag(ALUFlag::Z, add == 0);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, (previous & 0xF) + (value & 0xF) > 0xF);
@@ -150,31 +181,9 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::C, sp > 0xFFFF - value_u16);
     }
 
-    pub fn adc(&mut self, value: u8) {
-        let a: u8 = self.r.get_byte(REG::A);
-        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
-        let add: u8 = a.wrapping_add(value).wrapping_add(c);
-        self.r.set_byte(REG::A, add);
-        self.r.update_flag(ALUFlag::Z, add == 0);
-        self.r.update_flag(ALUFlag::N, false);
-        self.r.update_flag(ALUFlag::H, (a & 0xF) + (value & 0xF) + c > 0xF);
-        self.r.update_flag(ALUFlag::C, (a as u16) > (0xFF as u16) - (value as u16) - (c as u16));
-
-
-    }
-
-    pub fn sub_word(&mut self, id: REG, value: u16) {
-        let previous: u16 = self.r.get_word(id);
-        let sub: u16 = previous.wrapping_sub(value);
-        self.r.set_word(id, sub);
-        self.r.update_flag(ALUFlag::Z, sub == 0);
-        self.r.update_flag(ALUFlag::N, true);
-        self.r.update_flag(ALUFlag::H, (previous & 0xFF) < (value & 0xFF));
-        self.r.update_flag(ALUFlag::C, previous < value);
-    }
-
-    pub fn sub_byte(&mut self, id: REG, value: u8) {
+    pub fn sub_byte(&mut self, id: REG, id2: REG) {
         let previous: u8 = self.r.get_byte(id);
+        let value: u8 = if id2 == REG::HL { self.m.read_byte(self.r.get_word(id2)) } else { self.r.get_byte(id2) };
         let sub: u8 = previous.wrapping_sub(value);
         self.r.set_byte(id, sub);
         self.r.update_flag(ALUFlag::Z, sub == 0);
@@ -182,16 +191,15 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::H, (previous & 0xF) < (value & 0xF));
         self.r.update_flag(ALUFlag::C, previous < value);
     }
-
-    pub fn sbc(&mut self, value: u8) {
-        let a: u8 = self.r.get_byte(REG::A);
-        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
-        let sub: u8 = a.wrapping_sub(value).wrapping_sub(c);
-        self.r.set_byte(REG::A, sub);
+    
+    pub fn sub(&mut self, id: REG, value: u8) {
+        let previous: u8 = self.r.get_byte(id);
+        let sub: u8 = previous.wrapping_sub(value);
+        self.r.set_byte(id, sub);
         self.r.update_flag(ALUFlag::Z, sub == 0);
         self.r.update_flag(ALUFlag::N, true);
-        self.r.update_flag(ALUFlag::H, (a & 0xF) < (value & 0xF) + c);
-        self.r.update_flag(ALUFlag::C, (a as u16) < (value as u16) + (c as u16));
+        self.r.update_flag(ALUFlag::H, (previous & 0xF) < (value & 0xF));
+        self.r.update_flag(ALUFlag::C, previous < value);
     }
 
     pub fn rlca(&mut self, id: REG) {
@@ -276,8 +284,32 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::N, false);
     }
 
+    pub fn adc(&mut self, id: REG) {
+        let a: u8 = self.r.get_byte(REG::A);
+        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
+        let value: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
+        let add: u8 = a.wrapping_add(value).wrapping_add(c);
+        self.r.set_byte(REG::A, add);
+        self.r.update_flag(ALUFlag::Z, add == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, (a & 0xF) + (value & 0xF) + c > 0xF);
+        self.r.update_flag(ALUFlag::C, (a as u16) > (0xFF as u16) - (value as u16) - (c as u16));
+    }
 
-    pub fn and(&mut self, val: u8) {
+    pub fn sbc(&mut self, id: REG) {
+        let a: u8 = self.r.get_byte(REG::A);
+        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
+        let value: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
+        let sub: u8 = a.wrapping_sub(value).wrapping_sub(c);
+        self.r.set_byte(REG::A, sub);
+        self.r.update_flag(ALUFlag::Z, sub == 0);
+        self.r.update_flag(ALUFlag::N, true);
+        self.r.update_flag(ALUFlag::H, (a & 0xF) < (value & 0xF) + c);
+        self.r.update_flag(ALUFlag::C, (a as u16) < (value as u16) + (c as u16));
+    }
+
+    pub fn and(&mut self, id: REG) {
+        let val: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
         let and_a = self.r.get_byte(REG::A) & val;
         self.r.set_byte(REG::A, and_a);
         self.r.update_flag(ALUFlag::Z, and_a == 0);
@@ -286,7 +318,8 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::C, false);
     }
 
-    pub fn xor(&mut self, val: u8) {
+    pub fn xor(&mut self, id: REG) {
+        let val: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
         let xor_a = self.r.get_byte(REG::A) ^ val;
         self.r.set_byte(REG::A, xor_a);
         self.r.update_flag(ALUFlag::Z, xor_a == 0);
@@ -295,7 +328,8 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::C, false);
     }
 
-    pub fn or(&mut self, val: u8) {
+    pub fn or(&mut self, id: REG) {
+        let val: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
         let or_a = self.r.get_byte(REG::A) | val;
         self.r.set_byte(REG::A, or_a);
         self.r.update_flag(ALUFlag::Z, or_a == 0);
@@ -304,13 +338,76 @@ impl InstructionSet {
         self.r.update_flag(ALUFlag::C, false);
 
     }
-    pub fn cp(&mut self, val: u8) {
+    pub fn cp(&mut self, id: REG) {
+        let val: u8 = if id == REG::HL { self.m.read_byte(self.r.get_word(id)) } else { self.r.get_byte(id) };
         let a = self.r.get_byte(REG::A);
         let cp_a = a.wrapping_sub(val);
         self.r.update_flag(ALUFlag::Z, cp_a == 0);
         self.r.update_flag(ALUFlag::N, true);
         self.r.update_flag(ALUFlag::H, (a & 0xF) < (val & 0xF));
         self.r.update_flag(ALUFlag::C, a < val);
+    }
+
+    pub fn adc_val(&mut self, val: u8) {
+        let a: u8 = self.r.get_byte(REG::A);
+        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
+        let add: u8 = a.wrapping_add(val).wrapping_add(c);
+        self.r.set_byte(REG::A, add);
+        self.r.update_flag(ALUFlag::Z, add == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, (a & 0xF) + (val & 0xF) + c > 0xF);
+        self.r.update_flag(ALUFlag::C, (a as u16) > (0xFF as u16) - (val as u16) - (c as u16));
+    }
+
+    pub fn sbc_val(&mut self, val: u8) {
+        let a: u8 = self.r.get_byte(REG::A);
+        let c: u8 = self.r.get_flag(ALUFlag::C) as u8;
+        let sub: u8 = a.wrapping_sub(val).wrapping_sub(c);
+        self.r.set_byte(REG::A, sub);
+        self.r.update_flag(ALUFlag::Z, sub == 0);
+        self.r.update_flag(ALUFlag::N, true);
+        self.r.update_flag(ALUFlag::H, (a & 0xF) < (val & 0xF) + c);
+        self.r.update_flag(ALUFlag::C, (a as u16) < (val as u16) + (c as u16));
+    }
+
+    pub fn and_val(&mut self, val: u8) {
+        let and_a = self.r.get_byte(REG::A) & val;
+        self.r.set_byte(REG::A, and_a);
+        self.r.update_flag(ALUFlag::Z, and_a == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, true);
+        self.r.update_flag(ALUFlag::C, false);
+    }
+
+    pub fn xor_val(&mut self, val: u8) {
+        let xor_a = self.r.get_byte(REG::A) ^ val;
+        self.r.set_byte(REG::A, xor_a);
+        self.r.update_flag(ALUFlag::Z, xor_a == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, false);
+        self.r.update_flag(ALUFlag::C, false);
+    }
+
+    pub fn or_val(&mut self, val: u8) {
+        let or_a = self.r.get_byte(REG::A) | val;
+        self.r.set_byte(REG::A, or_a);
+        self.r.update_flag(ALUFlag::Z, or_a == 0);
+        self.r.update_flag(ALUFlag::N, false);
+        self.r.update_flag(ALUFlag::H, false);
+        self.r.update_flag(ALUFlag::C, false);
+
+    }
+    pub fn cp_val(&mut self, val: u8) {
+        let a = self.r.get_byte(REG::A);
+        let cp_a = a.wrapping_sub(val);
+        self.r.update_flag(ALUFlag::Z, cp_a == 0);
+        self.r.update_flag(ALUFlag::N, true);
+        self.r.update_flag(ALUFlag::H, (a & 0xF) < (val & 0xF));
+        self.r.update_flag(ALUFlag::C, a < val);
+    }
+
+    pub fn jp_hl(&mut self) {
+        self.r.set_word(REG::PC, self.r.get_word(REG::HL));
     }
 
     pub fn jp(&mut self, value: u16, flag: bool) -> u8 {
@@ -529,6 +626,10 @@ impl InstructionSet {
         let a: u8 = self.r.get_byte(REG::A);
         self.m.write_byte(hl, a);
         self.r.set_word(REG::HL, hl.wrapping_sub(1));
+    }
+
+    pub fn get_flag(&self, flag: ALUFlag) -> bool {
+        self.r.get_flag(flag)
     }
 }
 

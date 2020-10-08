@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::cartridge::Cartridge;
 
 pub struct Memory {
@@ -12,7 +13,7 @@ impl Memory {
     pub fn init(boot_rom: [u8; 0x100], filename: &str) -> Memory {
         let mut header: [u8; 0x150] = [0; 0x150];
         header[..0x100].copy_from_slice(&boot_rom);
-        let cartridge: Cartridge = Cartridge::load(filename);
+        let cartridge: Cartridge = Cartridge::load(PathBuf::from(filename));
         header[0x100..0x150].copy_from_slice(&cartridge.get_header()[..]);
         let ram = [0; 0xFFFF];
         Memory { header, cartridge, ram, }
@@ -65,9 +66,9 @@ impl Memory {
             // Cartridge Header Area
             0x0100 ..= 0x014F => { self.header[addr as usize]; },
             // Cartridge ROM - Bank 0 (fixed)
-            0x0150 ..= 0x3FFF => { self.cartridge.read(addr); },
+            0x0150 ..= 0x3FFF => { self.cartridge.write(addr, value); },
             // Cartridge ROM - Switchable Banks 1-xx
-            0x4000 ..= 0x7FFF => { self.cartridge.read(addr); },
+            0x4000 ..= 0x7FFF => { self.cartridge.write(addr, value); },
             // Character RAM
             0x8000 ..= 0x97FF => { self.ram[addr as usize]; },
             // BG  Data 1
@@ -75,7 +76,7 @@ impl Memory {
             // BG  Data 2
             0x9C00 ..= 0x9FFF => { self.ram[addr as usize]; },
             // Cartridge RAM (If Available)
-            0xA000 ..= 0xBFFF => { self.cartridge.read(addr); },
+            0xA000 ..= 0xBFFF => { self.cartridge.write(addr, value); },
             // Internal RAM - Bank 0 (fixed)
             0xC000 ..= 0xCFFF => { self.ram[addr as usize]; },
             // Internal RAM - Bank 1-7 (switchable - CGB only)

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::cartridge::{MBC, ram::RAM};
 
 pub struct MBC1 {
@@ -5,11 +6,11 @@ pub struct MBC1 {
     ram_bank_mode: bool,
     ram: RAM,
     swap: Vec<Vec<u8>>,
-    header_checksum: u8,
+    _header_checksum: u8,
 }
 
 impl MBC1 {
-    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC1 {
+    pub fn init(filename: PathBuf, data: Vec<u8>, bank_size: u8, ram_size: u8, _header_checksum: u8) -> MBC1 {
         let mut swap: Vec<Vec<u8>> = Vec::with_capacity(bank_size as usize);
         swap.push(data[..0x4000].to_vec());
         swap.push(data[0x4000..0x8000].to_vec());
@@ -18,9 +19,9 @@ impl MBC1 {
         }
         let active_rom_bank = 1;
         let ram_bank_mode = false;
-        let ram: RAM = RAM::init(ram_size);
+        let ram: RAM = RAM::init(&filename, ram_size);
 
-        MBC1 { active_rom_bank, ram_bank_mode, ram, swap, header_checksum }
+        MBC1 { active_rom_bank, ram_bank_mode, ram, swap, _header_checksum }
     }
 }
 

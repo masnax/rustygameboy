@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::cartridge::{MBC, ram::RAM, rtc::RTC};
 
 pub struct MBC3 {
@@ -6,11 +7,11 @@ pub struct MBC3 {
     ram: RAM,
     rtc: RTC,
     swap: Vec<Vec<u8>>,
-    header_checksum: u8,
+    _header_checksum: u8,
 }
 
 impl MBC3 {
-    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC3 {
+    pub fn init(filename: PathBuf, data: Vec<u8>, bank_size: u8, ram_size: u8, _header_checksum: u8) -> MBC3 {
         let mut swap: Vec<Vec<u8>> = Vec::with_capacity(bank_size as usize);
         swap.push(data[..0x4000].to_vec());
         swap.push(data[0x4000..0x8000].to_vec());
@@ -19,9 +20,9 @@ impl MBC3 {
         }
         let active_rom_bank = 1;
         let rtc_bank_mode = false;
-        let ram: RAM = RAM::init(ram_size);
-        let rtc: RTC = RTC::init();
-        MBC3 { active_rom_bank, rtc_bank_mode, ram, rtc, swap, header_checksum }
+        let ram: RAM = RAM::init(&filename, ram_size);
+        let rtc: RTC = RTC::init(&filename);
+        MBC3 { active_rom_bank, rtc_bank_mode, ram, rtc, swap, _header_checksum }
     }
 }
 
@@ -66,7 +67,8 @@ impl MBC for MBC3 {
             0x6000 ..= 0x7FFF => {
                 match value {
                     0x0 => { self.rtc.latch_buffer = true; },
-                    0x1 => { self.rtc.latch(); }
+                    0x1 => { self.rtc.latch(); },
+                    _ => { }
                 }
             },
             0xA000 ..= 0xBFFF => {

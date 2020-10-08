@@ -7,8 +7,6 @@ use crate::cb_instructions::CBInstructionSet;
 //single core
 pub struct CPU {
     i: InstructionSet,
-    r: Register,
-    m: Memory,
 }
 
 
@@ -16,8 +14,6 @@ impl CPU {
     pub fn init(registers: Register, mem_map: Memory) -> CPU {
         CPU {
             i: InstructionSet::init(registers,  mem_map),
-            r: registers,
-            m: mem_map
         }
     }
 
@@ -44,7 +40,7 @@ impl CPU {
             // LD (BC), A
             0x02 => { self.i.ld_mr(REG::BC, REG::A); 2 },
             // INC BC
-            0x03 => { self.r.set_word(REG::BC, self.r.get_word(REG::BC).wrapping_add(1)); 2 },
+            0x03 => { self.i.inc_word(REG::BC); 2 },
             // INC B
             0x04 => { self.i.inc(REG::B); 1 },
             // DEC B
@@ -56,11 +52,11 @@ impl CPU {
             // LD (u16), SP
             0x08 => { self.i.ld_mw(REG::SP, self.scan_word()); 5 },
             // ADD HL, BC
-            0x09 => { self.i.add_word(REG::HL, self.r.get_word(REG::BC)); 2 },
+            0x09 => { self.i.add_word(REG::HL, REG::BC); 2 },
             // LD A, (BC)
             0x0A => { self.i.ld_rm(REG::A, REG::BC); 2 },
             // DEC BC
-            0x0B => { self.r.set_word(REG::BC, self.r.get_word(REG::BC).wrapping_sub(1)); 2 },
+            0x0B => { self.i.dec_word(REG::BC); 2 },
             // INC C
             0x0C => { self.i.inc(REG::C); 1 },
             // DEC C
@@ -76,7 +72,7 @@ impl CPU {
             // LD (DE), A
             0x12 => { self.i.ld_mr(REG::DE, REG::A); 2 },
             // INC DE
-            0x13 => { self.r.set_word(REG::DE, self.r.get_word(REG::DE).wrapping_add(1)); 2 },
+            0x13 => { self.i.inc_word(REG::DE); 2 },
             // INC D
             0x14 => { self.i.inc(REG::D); 1 },
             // DEC D
@@ -88,11 +84,11 @@ impl CPU {
             // JR s8
             0x18 => { self.i.jr(self.scan_byte() as i8, true) }, // TODO
             // ADD HL, DE
-            0x19 => { self.i.add_word(REG::HL, self.r.get_word(REG::DE)); 2 },
+            0x19 => { self.i.add_word(REG::HL, REG::DE); 2 },
             // LD A, (DE)
             0x1A => { self.i.ld_rm(REG::A, REG::DE); 2 },
             // DEC DE
-            0x1B => { self.r.set_word(REG::DE, self.r.get_word(REG::DE).wrapping_sub(1)); 2 },
+            0x1B => { self.i.dec_word(REG::DE); 2 },
             // INC E
             0x1C => { self.i.inc(REG::E); 1 },
             // DEC E
@@ -102,13 +98,13 @@ impl CPU {
             // RRA
             0x1F => { self.i.rra(REG::A); 1 },
             // JR NZ, s8
-            0x20 => { self.i.jr(self.scan_byte() as i8, !self.r.get_flag(ALUFlag::Z)) },
+            0x20 => { self.i.jr(self.scan_byte() as i8, !self.i.get_flag(ALUFlag::Z)) },
             // LD HL, U16
             0x21 => { self.i.ld_rw(REG::HL, self.scan_word()); 3 },
             // LD (HL+), A
             0x22 => { self.i.ld_mem_inc(); 2 },
             // INC HL
-            0x23 => { self.r.set_word(REG::HL, self.r.get_word(REG::HL).wrapping_add(1)); 2 },
+            0x23 => { self.i.inc_word(REG::HL); 2 },
             // INC H
             0x24 => { self.i.inc(REG::H); 1 },
             // DEC H
@@ -118,13 +114,13 @@ impl CPU {
             // DAA
             0x27 => { self.i.daa(); 1 },
             // JR Z, s8
-            0x28 => { self.i.jr(self.scan_byte() as i8, self.r.get_flag(ALUFlag::Z)) },
+            0x28 => { self.i.jr(self.scan_byte() as i8, self.i.get_flag(ALUFlag::Z)) },
             // ADD HL, HL
-            0x29 => { self.i.add_word(REG::HL, self.r.get_word(REG::HL)); 2 },
+            0x29 => { self.i.add_word(REG::HL, REG::HL); 2 },
             // LD A, (HL+)
             0x2A => { self.i.ld_inc(); 2 },
             // DEC HL
-            0x2B => { self.r.set_word(REG::HL, self.r.get_word(REG::HL).wrapping_sub(1)); 2 },
+            0x2B => { self.i.dec_word(REG::HL); 2 },
             // INC L
             0x2C => { self.i.inc(REG::L); 1 },
             // DEC L
@@ -134,13 +130,13 @@ impl CPU {
             // CPL
             0x2F => { self.i.cpl(); 1 },
             // JR NC, s8
-            0x30 => { self.i.jr(self.scan_byte() as i8, !self.r.get_flag(ALUFlag::C)) },
+            0x30 => { self.i.jr(self.scan_byte() as i8, !self.i.get_flag(ALUFlag::C)) },
             // LD SP, U16
             0x31 => { self.i.ld_rw(REG::SP, self.scan_word()); 3 },
             // LD (HL-), A
             0x32 => { self.i.ld_mem_dec(); 2 },
             // INC SP
-            0x33 => { self.r.set_word(REG::SP, self.r.get_word(REG::SP).wrapping_add(1)); 2 },
+            0x33 => { self.i.inc_word(REG::SP); 2 },
             // INC (HL)
             0x34 => { self.i.inc_mem(); 3 },
             // DEC (HL)
@@ -150,13 +146,13 @@ impl CPU {
             // SCF
             0x37 => { self.i.scf(); 1 },
             // JR C, s8
-            0x38 => { self.i.jr(self.scan_byte() as i8, self.r.get_flag(ALUFlag::C)) },
+            0x38 => { self.i.jr(self.scan_byte() as i8, self.i.get_flag(ALUFlag::C)) },
             // ADD HL, SP
-            0x39 => { self.i.add_word(REG::HL, self.r.get_word(REG::SP)); 2 },
+            0x39 => { self.i.add_word(REG::HL, REG::SP); 2 },
             // LD A, (HL-)
             0x3A => { self.i.ld_dec(); 2 },
             // DEC SP
-            0x3B => { self.r.set_word(REG::SP, self.r.get_word(REG::SP).wrapping_sub(1)); 2 },
+            0x3B => { self.i.dec_word(REG::SP); 2 },
             // INC A
             0x3C => { self.i.inc(REG::A); 1 },
             // DEC A
@@ -294,187 +290,187 @@ impl CPU {
             // LD A, A
             0x7F => { 1 },
             // ADD A, B
-            0x80 => { self.i.add_byte(REG::A, self.r.get_byte(REG::B)); 2 },
+            0x80 => { self.i.add_byte(REG::A, REG::B); 2 },
             // ADD A, C
-            0x81 => { self.i.add_byte(REG::A, self.r.get_byte(REG::C)); 2 },
+            0x81 => { self.i.add_byte(REG::A, REG::C); 2 },
             // ADD A, D
-            0x82 => { self.i.add_byte(REG::A, self.r.get_byte(REG::D)); 2 },
+            0x82 => { self.i.add_byte(REG::A, REG::D); 2 },
             // ADD A, E
-            0x83 => { self.i.add_byte(REG::A, self.r.get_byte(REG::E)); 2 },
+            0x83 => { self.i.add_byte(REG::A, REG::E); 2 },
             // ADD A, H
-            0x84 => { self.i.add_byte(REG::A, self.r.get_byte(REG::H)); 2 },
+            0x84 => { self.i.add_byte(REG::A, REG::H); 2 },
             // ADD A, L
-            0x85 => { self.i.add_byte(REG::A, self.r.get_byte(REG::L)); 2 },
+            0x85 => { self.i.add_byte(REG::A, REG::L); 2 },
             // ADD A, (HL)
-            0x86 => { self.i.add_byte(REG::A, self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0x86 => { self.i.add_byte_mem(REG::A, REG::HL); 2 },
             // ADD A, A
-            0x87 => { self.i.add_byte(REG::A, self.r.get_byte(REG::A)); 2 },
+            0x87 => { self.i.add_byte(REG::A, REG::A); 2 },
             // ADC A, B
-            0x88 => { self.i.adc(self.r.get_byte(REG::B)); 2 },
+            0x88 => { self.i.adc(REG::B); 2 },
             // ADC A, C
-            0x89 => { self.i.adc(self.r.get_byte(REG::C)); 2 },
+            0x89 => { self.i.adc(REG::C); 2 },
             // ADC A, D
-            0x8A => { self.i.adc(self.r.get_byte(REG::D)); 2 },
+            0x8A => { self.i.adc(REG::D); 2 },
             // ADC A, E
-            0x8B => { self.i.adc(self.r.get_byte(REG::E)); 2 },
+            0x8B => { self.i.adc(REG::E); 2 },
             // ADC A, H
-            0x8C => { self.i.adc(self.r.get_byte(REG::H)); 2 },
+            0x8C => { self.i.adc(REG::H); 2 },
             // ADC A, L
-            0x8D => { self.i.adc(self.r.get_byte(REG::L)); 2 },
+            0x8D => { self.i.adc(REG::L); 2 },
             // ADC A, (HL)
-            0x8E => { self.i.adc(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0x8E => { self.i.adc(REG::HL); 2 },
             // ADC A, A
-            0x8F => { self.i.adc(self.r.get_byte(REG::A)); 2 },
+            0x8F => { self.i.adc(REG::A); 2 },
             // SUB B
-            0x90 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::B)); 1 },
+            0x90 => { self.i.sub_byte(REG::A, REG::B); 1 },
             // SUB C
-            0x91 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::C)); 1 },
+            0x91 => { self.i.sub_byte(REG::A, REG::C); 1 },
             // SUB D
-            0x92 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::D)); 1 },
+            0x92 => { self.i.sub_byte(REG::A, REG::D); 1 },
             // SUB E
-            0x93 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::E)); 1 },
+            0x93 => { self.i.sub_byte(REG::A, REG::E); 1 },
             // SUB H
-            0x94 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::H)); 1 },
+            0x94 => { self.i.sub_byte(REG::A, REG::H); 1 },
             // SUB L
-            0x95 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::L)); 1 },
+            0x95 => { self.i.sub_byte(REG::A, REG::L); 1 },
             // SUB (HL)
-            0x96 => { self.i.sub_byte(REG::A, self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0x96 => { self.i.sub_byte(REG::A, REG::HL); 2 },
             // SUB A
-            0x97 => { self.i.sub_byte(REG::A, self.r.get_byte(REG::A)); 1 },
+            0x97 => { self.i.sub_byte(REG::A, REG::A); 1 },
             // SBC A, B
-            0x98 => { self.i.sbc(self.r.get_byte(REG::B)); 1 },
+            0x98 => { self.i.sbc(REG::B); 1 },
             // SBC A, C
-            0x99 => { self.i.sbc(self.r.get_byte(REG::C)); 1 },
+            0x99 => { self.i.sbc(REG::C); 1 },
             // SBC A, D
-            0x9A => { self.i.sbc(self.r.get_byte(REG::D)); 1 },
+            0x9A => { self.i.sbc(REG::D); 1 },
             // SBC A, E
-            0x9B => { self.i.sbc(self.r.get_byte(REG::E)); 1 },
+            0x9B => { self.i.sbc(REG::E); 1 },
             // SBC A, H
-            0x9C => { self.i.sbc(self.r.get_byte(REG::H)); 1 },
+            0x9C => { self.i.sbc(REG::H); 1 },
             // SBC A, L
-            0x9D => { self.i.sbc(self.r.get_byte(REG::L)); 1 },
+            0x9D => { self.i.sbc(REG::L); 1 },
             // SBC A, (HL)
-            0x9E => { self.i.sbc(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0x9E => { self.i.sbc(REG::HL); 2 },
             // SBC A, A
-            0x9F => { self.i.sbc(self.r.get_byte(REG::A)); 1 },
+            0x9F => { self.i.sbc(REG::A); 1 },
             // AND B
-            0xA0 => { self.i.and(self.r.get_byte(REG::B)); 1 },
+            0xA0 => { self.i.and(REG::B); 1 },
             // AND C
-            0xA1 => { self.i.and(self.r.get_byte(REG::C)); 1 },
+            0xA1 => { self.i.and(REG::C); 1 },
             // AND D
-            0xA2 => { self.i.and(self.r.get_byte(REG::D)); 1 },
+            0xA2 => { self.i.and(REG::D); 1 },
             // AND E
-            0xA3 => { self.i.and(self.r.get_byte(REG::E)); 1 },
+            0xA3 => { self.i.and(REG::E); 1 },
             // AND H
-            0xA4 => { self.i.and(self.r.get_byte(REG::H)); 1 },
+            0xA4 => { self.i.and(REG::H); 1 },
             // AND L
-            0xA5 => { self.i.and(self.r.get_byte(REG::L)); 1 },
+            0xA5 => { self.i.and(REG::L); 1 },
             // AND (HL)
-            0xA6 => { self.i.and(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0xA6 => { self.i.and(REG::HL); 2 },
             // AND A
-            0xA7 => { self.i.and(self.r.get_byte(REG::A)); 1 },
+            0xA7 => { self.i.and(REG::A); 1 },
             // XOR B
-            0xA8 => { self.i.xor(self.r.get_byte(REG::B)); 1 },
+            0xA8 => { self.i.xor(REG::B); 1 },
             // XOR C
-            0xA9 => { self.i.xor(self.r.get_byte(REG::C)); 1 },
+            0xA9 => { self.i.xor(REG::C); 1 },
             // XOR D
-            0xAA => { self.i.xor(self.r.get_byte(REG::D)); 1 },
+            0xAA => { self.i.xor(REG::D); 1 },
             // XOR E
-            0xAB => { self.i.xor(self.r.get_byte(REG::E)); 1 },
+            0xAB => { self.i.xor(REG::E); 1 },
             // XOR H
-            0xAC => { self.i.xor(self.r.get_byte(REG::H)); 1 },
+            0xAC => { self.i.xor(REG::H); 1 },
             // XOR L
-            0xAD => { self.i.xor(self.r.get_byte(REG::L)); 1 },
+            0xAD => { self.i.xor(REG::L); 1 },
             // XOR (HL)
-            0xAE => { self.i.xor(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0xAE => { self.i.xor(REG::HL); 2 },
             // XOR A
-            0xAF => { self.i.xor(self.r.get_byte(REG::A)); 1 },
+            0xAF => { self.i.xor(REG::A); 1 },
             // OR B
-            0xB0 => { self.i.or(self.r.get_byte(REG::B)); 1 },
+            0xB0 => { self.i.or(REG::B); 1 },
             // OR C
-            0xB1 => { self.i.or(self.r.get_byte(REG::C)); 1 },
+            0xB1 => { self.i.or(REG::C); 1 },
             // OR D
-            0xB2 => { self.i.or(self.r.get_byte(REG::D)); 1 },
+            0xB2 => { self.i.or(REG::D); 1 },
             // OR E
-            0xB3 => { self.i.or(self.r.get_byte(REG::E)); 1 },
+            0xB3 => { self.i.or(REG::E); 1 },
             // OR H
-            0xB4 => { self.i.or(self.r.get_byte(REG::H)); 1 },
+            0xB4 => { self.i.or(REG::H); 1 },
             // OR L
-            0xB5 => { self.i.or(self.r.get_byte(REG::L)); 1 },
+            0xB5 => { self.i.or(REG::L); 1 },
             // OR (HL)
-            0xB6 => { self.i.or(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0xB6 => { self.i.or(REG::HL); 2 },
             // OR A
-            0xB7 => { self.i.or(self.r.get_byte(REG::A)); 1 },
+            0xB7 => { self.i.or(REG::A); 1 },
             // CP B
-            0xB8 => { self.i.cp(self.r.get_byte(REG::B)); 1 },
+            0xB8 => { self.i.cp(REG::B); 1 },
             // CP C
-            0xB9 => { self.i.cp(self.r.get_byte(REG::C)); 1 },
+            0xB9 => { self.i.cp(REG::C); 1 },
             // CP D
-            0xBA => { self.i.cp(self.r.get_byte(REG::D)); 1 },
+            0xBA => { self.i.cp(REG::D); 1 },
             // CP E
-            0xBB => { self.i.cp(self.r.get_byte(REG::E)); 1 },
+            0xBB => { self.i.cp(REG::E); 1 },
             // CP H
-            0xBC => { self.i.cp(self.r.get_byte(REG::H)); 1 },
+            0xBC => { self.i.cp(REG::H); 1 },
             // CP L
-            0xBD => { self.i.cp(self.r.get_byte(REG::L)); 1 },
+            0xBD => { self.i.cp(REG::L); 1 },
             // CP (HL)
-            0xBE => { self.i.cp(self.m.read_byte(self.r.get_word(REG::HL))); 2 },
+            0xBE => { self.i.cp(REG::HL); 2 },
             // CP A
-            0xBF => { self.i.cp(self.r.get_byte(REG::A)); 1 },
+            0xBF => { self.i.cp(REG::A); 1 },
             // RET NZ
-            0xC0 => { self.i.retc(!self.r.get_flag(ALUFlag::Z)) },
+            0xC0 => { self.i.retc(!self.i.get_flag(ALUFlag::Z)) },
             // POP BC
             0xC1 => { self.i.pop(REG::BC); 3 },
             // JP NZ, a16
-            0xC2 => { self.i.jp(self.scan_word(), !self.r.get_flag(ALUFlag::Z)) },
+            0xC2 => { self.i.jp(self.scan_word(), !self.i.get_flag(ALUFlag::Z)) },
             // JP a16
             0xC3 => { self.i.jp(self.scan_word(), true) },
             // CALL NZ, a16
-            0xC4 => { self.i.call(self.scan_word(), !self.r.get_flag(ALUFlag::Z)) },
+            0xC4 => { self.i.call(self.scan_word(), !self.i.get_flag(ALUFlag::Z)) },
             // PUSH BC
             0xC5 => { self.i.push(REG::BC); 4 },
             // ADD A, d8
-            0xC6 => { self.i.add_byte(REG::A, self.scan_byte()); 2 },
+            0xC6 => { self.i.add(REG::A, self.scan_byte()); 2 },
             // RST 0
             0xC7 => { self.i.rst(0); 4 },
             // RET Z
-            0xC8 => { self.i.retc(self.r.get_flag(ALUFlag::Z)) },
+            0xC8 => { self.i.retc(self.i.get_flag(ALUFlag::Z)) },
             // RET
             0xC9 => { self.i.ret(); 4 },
             // JP Z, a16
-            0xCA => { self.i.jp(self.scan_word(), self.r.get_flag(ALUFlag::Z)) },
+            0xCA => { self.i.jp(self.scan_word(), self.i.get_flag(ALUFlag::Z)) },
             // CALL Z, a16
-            0xCC => { self.i.call(self.scan_word(), self.r.get_flag(ALUFlag::Z)) },
+            0xCC => { self.i.call(self.scan_word(), self.i.get_flag(ALUFlag::Z)) },
             // CALL a16
             0xCD => { self.i.call(self.scan_word(), true) },
             // ADC d8
-            0xCE => { self.i.adc(self.scan_byte()); 2 },
+            0xCE => { self.i.adc_val(self.scan_byte()); 2 },
             // RST 1
             0xCF => { self.i.rst(1); 4 },
             // RET NC
-            0xD0 => { self.i.retc(!self.r.get_flag(ALUFlag::C)) },
+            0xD0 => { self.i.retc(!self.i.get_flag(ALUFlag::C)) },
             // POP DE
             0xD1 => { self.i.pop(REG::DE); 3 },
             // JP NC, a16
-            0xD2 => { self.i.jp(self.scan_word(), !self.r.get_flag(ALUFlag::C)) },
+            0xD2 => { self.i.jp(self.scan_word(), !self.i.get_flag(ALUFlag::C)) },
             // CALL NC, a16
-            0xD4 => { self.i.call(self.scan_word(), !self.r.get_flag(ALUFlag::C)) },
+            0xD4 => { self.i.call(self.scan_word(), !self.i.get_flag(ALUFlag::C)) },
             // PUSH DE
             0xD5 => { self.i.push(REG::DE); 4 },
             // SUB d8
-            0xD6 => { self.i.sub_byte(REG::A, self.scan_byte()); 2 },
+            0xD6 => { self.i.sub(REG::A, self.scan_byte()); 2 },
             // RST 2
             0xD7 => { self.i.rst(2); 4 },
             // RET C
-            0xD8 => { self.i.retc(self.r.get_flag(ALUFlag::C)) },
+            0xD8 => { self.i.retc(self.i.get_flag(ALUFlag::C)) },
             // RETI
             0xD9 => { self.i.reti(); 4 },
             // JP C, a16
-            0xDA => { self.i.jp(self.scan_word(), self.r.get_flag(ALUFlag::C)) },
+            0xDA => { self.i.jp(self.scan_word(), self.i.get_flag(ALUFlag::C)) },
             // CALL C, a16
-            0xDC => { self.i.call(self.scan_word(), self.r.get_flag(ALUFlag::C)) },
+            0xDC => { self.i.call(self.scan_word(), self.i.get_flag(ALUFlag::C)) },
             // SBC d8
-            0xDE => { self.i.sbc(self.scan_byte()); 2 },
+            0xDE => { self.i.sbc_val(self.scan_byte()); 2 },
             // RST 3
             0xDF => { self.i.rst(3); 4 },
             // LD (a8), A
@@ -486,17 +482,17 @@ impl CPU {
             // PUSH HL
             0xE5 => { self.i.push(REG::HL); 4 },
             // AND d8
-            0xE6 => { self.i.and(self.scan_byte()); 2 },
+            0xE6 => { self.i.and_val(self.scan_byte()); 2 },
             // RST 4
             0xE7 => { self.i.rst(4); 4 },
             // ADD SP, s8
             0xE8 => { self.i.add_stack(self.scan_byte() as i8); 4 },
             // JP (HL)
-            0xE9 => { self.i.jp(self.r.get_word(REG::HL), true) },
+            0xE9 => { self.i.jp_hl(); 4 },
             // LD (a16), A
             0xEA => { self.i.ld_mwr(self.scan_word(), REG::A); 4 },
             // XOR d8
-            0xEE => { self.i.xor(self.scan_byte()); 2 },
+            0xEE => { self.i.xor_val(self.scan_byte()); 2 },
             // RST 5
             0xEF => { self.i.rst(5); 4 },
             // LD A, (a8)
@@ -510,7 +506,7 @@ impl CPU {
             // PUSH AF
             0xF5 => { self.i.push(REG::AF); 4 },
             // OR d8
-            0xF6 => { self.i.or(self.scan_byte()); 2 },
+            0xF6 => { self.i.or_val(self.scan_byte()); 2 },
             // RST 6
             0xF7 => { self.i.rst(6); 4 },
             // LD HL, SP+s8
@@ -522,7 +518,7 @@ impl CPU {
             // EI
             0xFB => {self.i.ei(); 1 },
             // CP d8
-            0xFE => { self.i.cp(self.scan_byte()); 2 },
+            0xFE => { self.i.cp_val(self.scan_byte()); 2 },
             // RST 7
             0xFF => { self.i.rst(7); 4 },
             _other => { panic!("[ERROR] invalid opcode") }

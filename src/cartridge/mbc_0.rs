@@ -2,14 +2,12 @@ use crate::cartridge::MBC;
 
 pub struct MBC0 {
     data: Vec<u8>,
-    bank_size: u8,
-    ram_size: u8,
-    header_checksum: u8,
+    _header_checksum: u8,
 }
 
 impl MBC0 {
-    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> Self {
-        MBC0 { data, bank_size, ram_size, header_checksum, }
+    pub fn init(data: Vec<u8>, _header_checksum: u8) -> Self {
+        MBC0 { data, _header_checksum, }
     }
 }
 
