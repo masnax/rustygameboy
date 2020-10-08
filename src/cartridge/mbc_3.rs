@@ -10,7 +10,7 @@ pub struct MBC3 {
 }
 
 impl MBC3 {
-    pub fn load_rom(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC3 {
+    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC3 {
         let mut swap: Vec<Vec<u8>> = Vec::with_capacity(bank_size as usize);
         swap.push(data[..0x4000].to_vec());
         swap.push(data[0x4000..0x8000].to_vec());

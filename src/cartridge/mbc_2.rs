@@ -1,5 +1,4 @@
-use crate::cartridge::MBC;
-use crate::cartridge::ram::RAM;
+use crate::cartridge::{MBC, ram::RAM};
 
 pub struct MBC2 {
     active_rom_bank: usize,
@@ -10,7 +9,7 @@ pub struct MBC2 {
 }
 
 impl MBC2 {
-    pub fn load_rom(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC2 {
+    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> MBC2 {
         let mut swap: Vec<Vec<u8>> = Vec::with_capacity(bank_size as usize);
         swap.push(data[..0x4000].to_vec());
         swap.push(data[0x4000..0x8000].to_vec());

@@ -8,7 +8,7 @@ pub struct MBC0 {
 }
 
 impl MBC0 {
-    pub fn load_rom(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> Self {
+    pub fn init(data: Vec<u8>, bank_size: u8, ram_size: u8, header_checksum: u8) -> Self {
         MBC0 { data, bank_size, ram_size, header_checksum, }
     }
 }

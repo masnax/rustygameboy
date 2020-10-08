@@ -60,16 +60,4 @@ impl RTC {
             self.latch_buffer = false;
         }
     }
-
-    fn get_(&self) -> u64 {
-        let secs = self.rtc[0];
-        let mins_as_secs = self.rtc[1] * 60;
-        let hrs_as_secs = self.rtc[2] * 3600;
-        let days_l = self.rtc[3] as u16;
-        let days_u = ((self.rtc[4] & 0x1) << 8) as u16;
-        let days_as_secs =  (days_u | days_l) * 3600 * 24;
-
-
-        return 0;
-    }
 }

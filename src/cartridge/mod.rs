@@ -4,7 +4,6 @@ pub mod mbc_0;
 pub mod mbc_1;
 pub mod mbc_2;
 pub mod mbc_3;
-pub mod mbc_4;
 pub mod mbc_5;
 
 
@@ -46,22 +45,19 @@ impl Cartridge {
 
         match mbc_type_flag {
             0x00 => { Cartridge {
-                mbc: Box::new(mbc_0::MBC0::load_rom(buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_0::MBC0::init(buf, bank_size, ram_size, header_checksum))
             } },
             0x01 ..= 0x03 => { Cartridge {
-                mbc: Box::new(mbc_1::MBC1::load_rom(buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_1::MBC1::init(buf, bank_size, ram_size, header_checksum))
             } },
             0x05 ..= 0x06 => { Cartridge {
-                mbc: Box::new(mbc_2::MBC2::load_rom(buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_2::MBC2::init(buf, bank_size, ram_size, header_checksum))
             } },
             0x0F ..= 0x13 => { Cartridge {
-                mbc: Box::new(mbc_3::MBC3::load_rom(buf, bank_size, ram_size, header_checksum))
-            } },
-            0x15 ..= 0x17 => { Cartridge {
-                mbc: Box::new(mbc_4::MBC4::load_rom(buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_3::MBC3::init(buf, bank_size, ram_size, header_checksum))
             } },
             0x19 ..= 0x1E => { Cartridge {
-                mbc: Box::new(mbc_5::MBC5::load_rom(buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_5::MBC5::init(buf, bank_size, ram_size, header_checksum))
             } },
             _ => { panic!("hi");}
         }
