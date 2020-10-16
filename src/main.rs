@@ -1,8 +1,10 @@
+extern crate minifb;
+use minifb::{Window, WindowOptions, Scale};
+
 mod cpu;
 mod register;
-mod instructions;
-mod cb_instructions;
 mod mem_map;
+mod tile;
 mod cartridge;
 
 //struct MotherBoard {
@@ -10,19 +12,24 @@ mod cartridge;
 //}
 
 fn main() {
-    let max = std::u16::MAX;
-    println!("{:?}", max);
-    let mut c: cpu::CPU = boot_sequence();
-    c.exec();
-    c.exec_cb();
+    //let mut c: cpu::CPU<'static> = boot_sequence();
+    let register: register::Register = register::Register::init();
+    let boot_sequence: Vec<u8> = std::fs::read("boot/boot.bin").expect("Missing Boot ROM");
+    let mut mem = mem_map::Memory::init(boot_sequence, "boot/red.gb");
+  //  let tile_set = tile::TileSet::init(&mut mem);
+    let mut c: cpu::CPU = cpu::CPU::init(register, &mut mem);
+
+    let mut window = Window::new("Maw Boy", 160, 144,
+        WindowOptions { scale: Scale::X2, ..Default::default()}
+        ).expect("Error Creating Window");
+
+    while window.is_open() {
+        c.exec();
+        window.update();
+    }
 //    cpu::run();
 }
 
-fn boot_sequence() -> cpu::CPU {
-    let register: register::Register = register::Register::init();
-    let mem = mem_map::Memory::init([0;0x100], "some file");
-    return cpu::CPU::init(register, mem);
-}
 
 pub fn run() {
     let reg: [u8; 4] = [0; 4];

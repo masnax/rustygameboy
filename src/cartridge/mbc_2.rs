@@ -57,7 +57,5 @@ impl MBC for MBC2 {
             _ => { }
         }
     }
-
-    fn get_header(&self) -> Vec<u8> { self.swap[0][..0x150].to_vec() }
 }
 

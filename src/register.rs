@@ -7,7 +7,7 @@ pub enum ALUFlag {
     Z = 0x80, // Zero flag
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum REG {
     A  = 0x00,
     F  = 0x01,
@@ -44,8 +44,10 @@ impl Register {
     }
 
     pub fn get_word(&self, reg: REG) -> u16 {
-        let word = self.registers.get(&reg);
-        if word != None { word.unwrap(); } ; panic!("[ERROR] invalid register id");
+        match self.registers.get(&reg) {
+            None => { panic!("Invalid Register: {:?}", reg) },
+            Some(w) => { return *w }
+        }
     }
 
     pub fn get_byte(&self, reg: REG) -> u8 {

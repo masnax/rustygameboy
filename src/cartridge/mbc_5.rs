@@ -45,7 +45,5 @@ impl MBC for MBC5 {
             _ => { panic!("Boop"); }
         }
     }
-
-    fn get_header(&self) -> Vec<u8> { self.swap[0][..0x150].to_vec() }
 }
 

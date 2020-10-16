@@ -20,7 +20,10 @@ impl RTC {
     }
 
     fn load_from_save(&mut self, filename: &PathBuf) {
-        let buf: Vec<u8> = std::fs::read(filename).expect("Canned Error");
+        let buf: Vec<u8> = match std::fs::read(filename) {
+            Err(_) => { vec![0; 5] },
+            Ok(b) => { b }
+        };
         for i in 0..5 {
             self.clock[i] = buf[i];
         }

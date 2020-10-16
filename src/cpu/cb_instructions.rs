@@ -1,8 +1,8 @@
-use crate::instructions::InstructionSet;
+use crate::cpu::instructions::InstructionSet;
 use crate::register::ALUFlag;
 use crate::register::REG;
 
-pub trait CBInstructionSet {
+pub trait CBInstructionSet<'a> {
     fn rlc(&mut self, id: REG);
     fn rl(&mut self, id: REG);
     fn rrc(&mut self, id: REG);
@@ -33,7 +33,7 @@ pub trait CBInstructionSet {
 }
 
 
-impl CBInstructionSet for InstructionSet {
+impl<'a> CBInstructionSet<'a> for InstructionSet<'a> {
     fn rlc(&mut self, id: REG) {
         let value: u8 = self.r.get_byte(id);
         let carry: bool = (value & 0x80) > 0;

@@ -19,6 +19,4 @@ impl MBC for MBC0 {
 
     // ROM type zero never writes to ROM
     fn write_byte(&mut self, _addr: u16, _value: u8) { }
-
-    fn get_header(&self) -> Vec<u8> { self.data[..0x150].to_vec() }
 }

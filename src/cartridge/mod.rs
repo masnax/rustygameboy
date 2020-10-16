@@ -23,6 +23,7 @@ impl Cartridge {
         let bank_size: u8;
         let ram_size: u8;
         let save_file: PathBuf = filename.with_extension("gbsave");
+
         match bank_size_flag {
             0x00 => { bank_size = 0; }, // No ROM
             0x01 => { bank_size = 4; },
@@ -65,10 +66,6 @@ impl Cartridge {
         }
     }
 
-    pub fn get_header(&self) -> Vec<u8> {
-        self.mbc.get_header()
-    }
-
     pub fn read(&self, addr: u16) -> u8 {
         self.mbc.read_byte(addr)
     }
@@ -82,5 +79,4 @@ impl Cartridge {
 pub trait MBC {
     fn read_byte(&self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, value: u8);
-    fn get_header(&self) -> Vec<u8>;
 }

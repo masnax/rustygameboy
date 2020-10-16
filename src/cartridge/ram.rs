@@ -17,7 +17,12 @@ impl RAM {
     }
 
     fn load_from_save(&mut self, filename: &PathBuf, ram_size: u8) {
-        let buf: Vec<u8> = std::fs::read(filename).expect("Canned Error");
+        let ram_len: usize = (ram_size as usize) * 0x2000;
+        let buf: Vec<u8> = match std::fs::read(filename) {
+            Err(_) => { vec![0; ram_len] },
+            Ok(b) => { b }
+        };
+
         for offset in 0..ram_size {
             let start_index: usize = (offset as u16 * 0x2000) as usize;
             let end_index: usize = ((offset + 1) as u16 * 0x2000) as usize;
