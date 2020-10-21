@@ -1,5 +1,5 @@
 use crate::register::{REG, REG::*, ALUFlag, Register};
-use crate::mem_map::Memory;
+use crate::memory::Memory;
 
 pub struct InstructionSet<'a> {
     pub r: Register,
@@ -9,10 +9,10 @@ pub struct InstructionSet<'a> {
 
 
 impl<'a> InstructionSet<'a> {
-    pub fn init(registers: Register, mem_map: &'a  mut Memory) -> InstructionSet<'a> {
+    pub fn init(registers: Register, memory: &'a  mut Memory) -> InstructionSet<'a> {
         InstructionSet {
             r: registers,
-            m: mem_map,
+            m: memory,
             halted: false,
         }
     }
@@ -40,6 +40,7 @@ impl<'a> InstructionSet<'a> {
             self.r.update_flag(ALUFlag::Z, sub == 0);
             self.r.update_flag(ALUFlag::N, true);
             self.r.update_flag(ALUFlag::H, (value & 0xF) == 0);
+            println!("DEC val: 0x{:X}", value);
         }
     }
 
@@ -344,7 +345,7 @@ impl<'a> InstructionSet<'a> {
     }
 
     pub fn jp(&mut self, flag: bool) -> u8 {
-        let value: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+        let value: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
         if flag {
             self.r.set_word(PC, value);
             4
@@ -355,6 +356,7 @@ impl<'a> InstructionSet<'a> {
 
     pub fn jr(&mut self, flag: bool) -> u8 {
         let steps: i8 = self.fetch() as i8;
+        println!("JR, {:?}, 0x{:X}", flag, steps);
         if flag {
             self.r.set_word(PC, self.r.get_word(PC).wrapping_add(steps as u16));
             3
@@ -377,13 +379,13 @@ impl<'a> InstructionSet<'a> {
         let sp: u16 = self.r.get_word(SP);
         let stack_low: u16 = (self.m.read_byte(sp) as u16) & 0xff;
         let stack_high: u16 = (self.m.read_byte(sp + 1) as u16) & 0xff;
-        let stack_total: u16 = (stack_high << 8) & stack_low;
+        let stack_total: u16 = (stack_high << 8) | stack_low;
         self.r.set_word(id, stack_total);
         self.r.set_word(SP, sp + 2);
     }
 
     pub fn call(&mut self, flag: bool) -> u8 {
-        let value: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+        let value: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
         if flag {
             let pc: u16 = self.r.get_word(PC);
             let pc_high: u8 = ((pc & 0xff00) >> 8) as u8;
@@ -413,7 +415,7 @@ impl<'a> InstructionSet<'a> {
             let sp: u16 = self.r.get_word(SP);
             let stack_low: u16 = (self.m.read_byte(sp) as u16) & 0xff;
             let stack_high: u16 = (self.m.read_byte(sp + 1) as u16) & 0xff;
-            let stack_total: u16 = (stack_high << 8) & stack_low;
+            let stack_total: u16 = (stack_high << 8) | stack_low;
             self.r.set_word(PC, stack_total);
             self.r.set_word(SP, sp + 2);
             5
@@ -426,7 +428,7 @@ impl<'a> InstructionSet<'a> {
         let sp: u16 = self.r.get_word(SP);
         let stack_low: u16 = (self.m.read_byte(sp) as u16) & 0xff;
         let stack_high: u16 = (self.m.read_byte(sp + 1) as u16) & 0xff;
-        let stack_total: u16 = (stack_high << 8) & stack_low;
+        let stack_total: u16 = (stack_high << 8) | stack_low;
         self.r.set_word(PC, stack_total);
         self.r.set_word(SP, sp + 2);
     }
@@ -435,7 +437,7 @@ impl<'a> InstructionSet<'a> {
         let sp: u16 = self.r.get_word(SP);
         let stack_low: u16 = (self.m.read_byte(sp) as u16) & 0xff;
         let stack_high: u16 = (self.m.read_byte(sp + 1) as u16) & 0xff;
-        let stack_total: u16 = (stack_high << 8) & stack_low;
+        let stack_total: u16 = (stack_high << 8) | stack_low;
         self.r.set_word(PC, stack_total);
         self.r.set_word(SP, sp + 2);
 
@@ -471,7 +473,8 @@ impl<'a> InstructionSet<'a> {
     }
 
     pub fn ld_rw(&mut self, r: REG) {
-        let w: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+        let w: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
+        println!("LD HL,  0x{:X}", w);
         self.r.set_word(r, w);
     }
 
@@ -490,7 +493,7 @@ impl<'a> InstructionSet<'a> {
     }
 
     pub fn ld_mwr(&mut self, r: REG) {
-        let mw: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+        let mw: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
         self.m.write_byte(mw, self.r.get_byte(r));
     }
 
@@ -501,12 +504,12 @@ impl<'a> InstructionSet<'a> {
     }
 
     pub fn ld_rmw(&mut self, r: REG) {
-        let mw: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+        let mw: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
         self.r.set_byte(r, self.m.read_byte(mw));
     }
 
     pub fn ld_mw(&mut self, m: REG) {
-       let w: u16 = ((self.fetch() as u16) << 8) | self.fetch() as u16;
+       let w: u16 = (self.fetch() as u16) | ((self.fetch() as u16) << 8);
        let sp: u16 = self.r.get_word(m);
        let sp_low: u8 = (sp & 0xFF) as u8;
        let sp_high: u8 = ((sp & 0xFF00) >> 8) as u8;
@@ -573,8 +576,8 @@ impl<'a> InstructionSet<'a> {
         return byte;
     }
 
-    pub fn get_vram(&self) -> [u8; 0x2000] {
-        self.m.get_vram()
+    pub fn get_frame_info(&self) -> ([u8; 0x800], usize, [u8; 0x1800], u8) {
+        self.m.get_frame_info()
     }
 }
 

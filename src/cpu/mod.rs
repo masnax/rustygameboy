@@ -1,27 +1,28 @@
 mod instructions;
 mod cb_instructions;
-use crate::mem_map::Memory;
-use crate::tile::TileSet;
+use crate::memory::Memory;
 use crate::register::{ALUFlag, REG::*, Register};
 use instructions::InstructionSet;
 use cb_instructions::CBInstructionSet;
 //single core
 pub struct CPU<'a> {
     instr: InstructionSet<'a>,
-    tile_set: TileSet,
 }
 
 
 impl<'a> CPU<'a> {
-    pub fn init(registers: Register, mem_map: &'a mut Memory) -> CPU<'a> {
+    pub fn init(registers: Register, memory: &'a mut Memory) -> CPU<'a> {
         CPU {
-            instr: InstructionSet::init(registers,  mem_map),
-            tile_set: TileSet::init(),
+            instr: InstructionSet::init(registers,  memory),
         }
     }
 
+    pub fn get_frame_info(&self) -> ([u8; 0x800], usize, [u8; 0x1800], u8) {
+        return self.instr.get_frame_info();
+    }
+
     pub fn _cycle(&mut self) {
-        self.tile_set.get_tile_set(self.instr.get_vram());
+        //self.tile_set.get_tile_set(self.instr.get_vram());
         loop {
             self.exec();
         }
@@ -29,7 +30,9 @@ impl<'a> CPU<'a> {
 
     // Returns number of cycles
     pub fn exec(&mut self) -> u8 {
+        print!("PC: 0x{:X} =>", self.instr.r.get_word(PC));
         let opcode = if self.instr.halted {0} else {self.instr.fetch()};
+        self.instr.m.write_byte(0xFF44, 0x90);
         match opcode {
             // NOP
             0x00 => { 1 },

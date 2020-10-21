@@ -17,6 +17,7 @@ pub struct Memory {
     sprite_ram: [u8; SRAM_SIZE],
     ram: [u8; RAM_SIZE],
     zram: [u8; ZRAM_SIZE],
+    io_ram: [u8; 0x80],
     interrupt: u8,
 }
 
@@ -32,8 +33,9 @@ impl Memory {
         let tile_ram = [0; TILE_SET_SIZE];
         let bg_ram = [0; BG_SIZE];
         let sprite_ram = [0; SRAM_SIZE];
+        let io_ram = [0; 0x80];
         let interrupt = 0;
-        Memory { header, cartridge, tile_ram, bg_ram, sprite_ram, ram, zram, interrupt, }
+        Memory { header, cartridge, tile_ram, bg_ram, sprite_ram, ram, zram, io_ram, interrupt, }
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
@@ -66,7 +68,7 @@ impl Memory {
             // Unusable Memory
             0xFEA0 ..= 0xFEFF => { 0 },
             // Hardware I/O Registers
-            0xFF00 ..= 0xFF7F => { 0 }, // TODO - Something to do with keys
+            0xFF00 ..= 0xFF7F => { self.read_io(addr) },
             // Zero Page - 127 bytes
             0xFF80 ..= 0xFFFE => { self.zram[(addr & 0x7F) as usize] },
             // Interrupt Enable Flag
@@ -104,7 +106,7 @@ impl Memory {
             // Unusable Memory
             0xFEA0 ..= 0xFEFF => { },
             // Hardware I/O Registers
-            0xFF00 ..= 0xFF7F => { println!("TODO: Write IO Registers"); },
+            0xFF00 ..= 0xFF7F => { self.write_io(addr, value); },
             // Zero Page - 127 bytes
             0xFF80 ..= 0xFFFE => { self.zram[(addr & 0x7F) as usize] = value; },
             // Interrupt Enable Flag
@@ -143,9 +145,25 @@ impl Memory {
     fn write_sprite(&mut self, addr: u16, value: u8) {
         self.sprite_ram[(addr & 0xFF) as usize] = value;
     }
+    
+    fn read_io(&self, addr: u16) -> u8 {
+        self.io_ram[(addr & 0x7F) as usize]
+    }
 
-    pub fn get_vram(&self) -> [u8; TILE_SET_SIZE] {
-        self.tile_ram
+    fn write_io(&mut self, addr: u16, value: u8) {
+        if addr == 0xFF44 {
+            if value < 0x9A {
+                self.io_ram[(addr & 0x7F) as usize] = value;
+            } else {
+                self.io_ram[(addr & 0x7F) as usize] = 0;
+            }
+        } else {
+            self.io_ram[(addr & 0x7F) as usize] = value;
+        }
+    }
+
+    pub fn get_frame_info(&self) -> ([u8; 0x800], usize, [u8; 0x1800], u8) {
+        return (self.bg_ram, 0, self.tile_ram, self.read_io(0xFF47));
     }
 }
 

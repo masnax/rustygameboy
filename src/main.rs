@@ -3,8 +3,8 @@ use minifb::{Window, WindowOptions, Scale};
 
 mod cpu;
 mod register;
-mod mem_map;
-mod tile;
+mod memory;
+mod display;
 mod cartridge;
 
 //struct MotherBoard {
@@ -15,7 +15,7 @@ fn main() {
     //let mut c: cpu::CPU<'static> = boot_sequence();
     let register: register::Register = register::Register::init();
     let boot_sequence: Vec<u8> = std::fs::read("boot/boot.bin").expect("Missing Boot ROM");
-    let mut mem = mem_map::Memory::init(boot_sequence, "boot/red.gb");
+    let mut mem = memory::Memory::init(boot_sequence, "boot/red.gb");
   //  let tile_set = tile::TileSet::init(&mut mem);
     let mut c: cpu::CPU = cpu::CPU::init(register, &mut mem);
 
@@ -25,11 +25,12 @@ fn main() {
 
     while window.is_open() {
         c.exec();
-        window.update();
+        let (bg_ram, bg_bank, vram, palette) = c.get_frame_info();
+        let frame: Vec<u32> = display::get_frame(bg_ram, bg_bank, vram, palette);
+        let _ = window.update_with_buffer(&frame, 256, 256);
     }
 //    cpu::run();
 }
-
 
 pub fn run() {
     let reg: [u8; 4] = [0; 4];
