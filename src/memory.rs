@@ -12,12 +12,12 @@ pub type Header = [u8; HEADER_SIZE];
 pub struct Memory {
     header: Header,
     cartridge: Cartridge,
-    tile_ram: [u8; TILE_SET_SIZE],
-    bg_ram: [u8; BG_SIZE],
-    sprite_ram: [u8; SRAM_SIZE],
+    pub tile_ram: [u8; TILE_SET_SIZE],
+    pub bg_ram: [u8; BG_SIZE],
+    pub sprite_ram: [u8; SRAM_SIZE],
     ram: [u8; RAM_SIZE],
     zram: [u8; ZRAM_SIZE],
-    io_ram: [u8; 0x80],
+    pub io_ram: [u8; 0x80],
     interrupt: u8,
 }
 
@@ -113,7 +113,7 @@ impl Memory {
             0xFFFF => { self.interrupt = value; }
         }
     }
-    
+
     fn read_ram(&self, addr: u16) -> u8 {
         self.ram[(addr & 0x1FFF) as usize]
     }
@@ -121,7 +121,7 @@ impl Memory {
     fn write_ram(&mut self, addr: u16, value: u8) {
         self.ram[(addr & 0x1FFF) as usize] = value;
     }
- 
+
     fn read_tile(&self, addr: u16) -> u8 {
         self.tile_ram[(addr & 0x1FFF) as usize]
     }
@@ -129,7 +129,7 @@ impl Memory {
     fn write_tile(&mut self, addr: u16, value: u8) {
         self.tile_ram[(addr & 0x1FFF) as usize] = value;
     }
-    
+
     fn read_bg(&self, addr: u16) -> u8 {
         self.bg_ram[(addr & 0x7FF) as usize]
     }
@@ -145,7 +145,7 @@ impl Memory {
     fn write_sprite(&mut self, addr: u16, value: u8) {
         self.sprite_ram[(addr & 0xFF) as usize] = value;
     }
-    
+
     fn read_io(&self, addr: u16) -> u8 {
         self.io_ram[(addr & 0x7F) as usize]
     }
@@ -160,10 +160,6 @@ impl Memory {
         } else {
             self.io_ram[(addr & 0x7F) as usize] = value;
         }
-    }
-
-    pub fn get_frame_info(&self) -> ([u8; 0x800], usize, [u8; 0x1800], u8) {
-        return (self.bg_ram, 0, self.tile_ram, self.read_io(0xFF47));
     }
 }
 

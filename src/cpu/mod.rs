@@ -2,44 +2,48 @@ mod instructions;
 mod cb_instructions;
 use crate::memory::Memory;
 use crate::register::{ALUFlag, REG::*, Register};
+use crate::display;
 use instructions::InstructionSet;
 use cb_instructions::CBInstructionSet;
 //single core
-pub struct CPU<'a> {
-    instr: InstructionSet<'a>,
+pub struct Cpu<'a> {
+    instr: InstructionSet,
+    mem: &'a mut Memory,
 }
 
 
-impl<'a> CPU<'a> {
-    pub fn init(registers: Register, memory: &'a mut Memory) -> CPU<'a> {
-        CPU {
-            instr: InstructionSet::init(registers,  memory),
+impl<'a> Cpu<'a> {
+    pub fn init(registers: Register, mem: &'a mut Memory) -> Cpu<'a> {
+        Cpu {
+            instr: InstructionSet::init(registers),
+            mem,
         }
     }
 
-    pub fn get_frame_info(&self) -> ([u8; 0x800], usize, [u8; 0x1800], u8) {
-        return self.instr.get_frame_info();
+    pub fn get_frame_info(&mut self) -> Vec<u32>  {
+        display::get_frame(self.mem)
     }
 
-    pub fn _cycle(&mut self) {
-        //self.tile_set.get_tile_set(self.instr.get_vram());
-        loop {
-            self.exec();
+    pub fn cycle(&mut self, cycles: u16) -> u16 {
+        if cycles == 0x1C8 {
+            let lcdc_ly: u8 = self.mem.read_byte(0xFF44);
+            self.mem.write_byte(0xFF44, lcdc_ly+1);
+            return self.exec();
+        } else {
+            return cycles + self.exec();
         }
     }
 
     // Returns number of cycles
-    pub fn exec(&mut self) -> u8 {
-        print!("PC: 0x{:X} =>", self.instr.r.get_word(PC));
-        let opcode = if self.instr.halted {0} else {self.instr.fetch()};
-        self.instr.m.write_byte(0xFF44, 0x90);
+    fn exec(&mut self) -> u16 {
+        let opcode = if self.instr.halted {0} else {self.instr.fetch(self.mem)};
         match opcode {
             // NOP
             0x00 => { 1 },
             // LD BC, d16
-            0x01 => { self.instr.ld_rw(BC); 3 },
+            0x01 => { self.instr.ld_rw(self.mem, BC); 3 },
             // LD (BC), A
-            0x02 => { self.instr.ld_mr(BC, A); 2 },
+            0x02 => { self.instr.ld_mr(self.mem, BC, A); 2 },
             // INC BC
             0x03 => { self.instr.inc(BC); 2 },
             // INC B
@@ -47,15 +51,15 @@ impl<'a> CPU<'a> {
             // DEC B
             0x05 => { self.instr.dec(B); 1 },
             // LD B, u8
-            0x06 => { self.instr.ld_rb(B); 2 },
+            0x06 => { self.instr.ld_rb(self.mem, B); 2 },
             // RLCA
             0x07 => { self.instr.rlca(A); 1 },
             // LD (u16), SP
-            0x08 => { self.instr.ld_mw(SP); 5 },
+            0x08 => { self.instr.ld_mw(self.mem, SP); 5 },
             // ADD HL, BC
-            0x09 => { self.instr.add(HL, BC); 2 },
+            0x09 => { self.instr.add(self.mem, HL, BC); 2 },
             // LD A, (BC)
-            0x0A => { self.instr.ld_rm(A, BC); 2 },
+            0x0A => { self.instr.ld_rm(self.mem, A, BC); 2 },
             // DEC BC
             0x0B => { self.instr.dec(BC); 2 },
             // INC C
@@ -63,15 +67,15 @@ impl<'a> CPU<'a> {
             // DEC C
             0x0D => { self.instr.dec(C); 1 },
             // LD C, u8
-            0x0E => { self.instr.ld_rb(C); 2 },
+            0x0E => { self.instr.ld_rb(self.mem, C); 2 },
             // RRCA
             0x0F => { self.instr.rrca(A); 1 },
             // STOP
             0x10 => { self.instr.stop(); 1 },
             // LD DE, U16
-            0x11 => { self.instr.ld_rw(DE); 3 },
+            0x11 => { self.instr.ld_rw(self.mem, DE); 3 },
             // LD (DE), A
-            0x12 => { self.instr.ld_mr(DE, A); 2 },
+            0x12 => { self.instr.ld_mr(self.mem, DE, A); 2 },
             // INC DE
             0x13 => { self.instr.inc(DE); 2 },
             // INC D
@@ -79,15 +83,15 @@ impl<'a> CPU<'a> {
             // DEC D
             0x15 => { self.instr.dec(D); 1 },
             // LD D, u8
-            0x16 => { self.instr.ld_rb(D); 2 },
+            0x16 => { self.instr.ld_rb(self.mem, D); 2 },
             // RLA
             0x17 => { self.instr.rla(A); 1 },
             // JR s8
-            0x18 => { self.instr.jr(true) },
+            0x18 => { self.instr.jr(self.mem, true) },
             // ADD HL, DE
-            0x19 => { self.instr.add(HL, DE); 2 },
+            0x19 => { self.instr.add(self.mem, HL, DE); 2 },
             // LD A, (DE)
-            0x1A => { self.instr.ld_rm(A, DE); 2 },
+            0x1A => { self.instr.ld_rm(self.mem, A, DE); 2 },
             // DEC DE
             0x1B => { self.instr.dec(DE); 2 },
             // INC E
@@ -95,15 +99,15 @@ impl<'a> CPU<'a> {
             // DEC E
             0x1D => { self.instr.dec(E); 1 },
             // LD E, u8
-            0x1E => { self.instr.ld_rb(E); 2 },
+            0x1E => { self.instr.ld_rb(self.mem, E); 2 },
             // RRA
             0x1F => { self.instr.rra(A); 1 },
             // JR NZ, s8
-            0x20 => { self.instr.jr(!self.instr.get_flag(ALUFlag::Z)) },
+            0x20 => { self.instr.jr(self.mem, !self.instr.get_flag(ALUFlag::Z)) },
             // LD HL, U16
-            0x21 => { self.instr.ld_rw(HL); 3 },
+            0x21 => { self.instr.ld_rw(self.mem, HL); 3 },
             // LD (HL+), A
-            0x22 => { self.instr.ld_mem_inc(); 2 },
+            0x22 => { self.instr.ld_mem_inc(self.mem); 2 },
             // INC HL
             0x23 => { self.instr.inc(HL); 2 },
             // INC H
@@ -111,15 +115,15 @@ impl<'a> CPU<'a> {
             // DEC H
             0x25 => { self.instr.dec(H); 1 },
             // LD H, u8
-            0x26 => { self.instr.ld_rb(H); 2 },
+            0x26 => { self.instr.ld_rb(self.mem, H); 2 },
             // DAA
             0x27 => { self.instr.daa(); 1 },
             // JR Z, s8
-            0x28 => { self.instr.jr(self.instr.get_flag(ALUFlag::Z)) },
+            0x28 => { self.instr.jr(self.mem, self.instr.get_flag(ALUFlag::Z)) },
             // ADD HL, HL
-            0x29 => { self.instr.add(HL, HL); 2 },
+            0x29 => { self.instr.add(self.mem, HL, HL); 2 },
             // LD A, (HL+)
-            0x2A => { self.instr.ld_inc(); 2 },
+            0x2A => { self.instr.ld_inc(self.mem); 2 },
             // DEC HL
             0x2B => { self.instr.dec(HL); 2 },
             // INC L
@@ -127,31 +131,31 @@ impl<'a> CPU<'a> {
             // DEC L
             0x2D => { self.instr.dec(L); 1 },
             // LD L, u8
-            0x2E => { self.instr.ld_rb(L); 2 },
+            0x2E => { self.instr.ld_rb(self.mem, L); 2 },
             // CPL
             0x2F => { self.instr.cpl(); 1 },
             // JR NC, s8
-            0x30 => { self.instr.jr(!self.instr.get_flag(ALUFlag::C)) },
+            0x30 => { self.instr.jr(self.mem, !self.instr.get_flag(ALUFlag::C)) },
             // LD SP, U16
-            0x31 => { self.instr.ld_rw(SP); 3 },
+            0x31 => { self.instr.ld_rw(self.mem, SP); 3 },
             // LD (HL-), A
-            0x32 => { self.instr.ld_mem_dec(); 2 },
+            0x32 => { self.instr.ld_mem_dec(self.mem); 2 },
             // INC SP
             0x33 => { self.instr.inc(SP); 2 },
             // INC (HL)
-            0x34 => { self.instr.inc_mem(); 3 },
+            0x34 => { self.instr.inc_mem(self.mem); 3 },
             // DEC (HL)
-            0x35 => { self.instr.dec_mem(); 3 },
+            0x35 => { self.instr.dec_mem(self.mem); 3 },
             // LD (HL), u8
-            0x36 => { self.instr.ld_mb(HL); 3 },
+            0x36 => { self.instr.ld_mb(self.mem, HL); 3 },
             // SCF
             0x37 => { self.instr.scf(); 1 },
             // JR C, s8
-            0x38 => { self.instr.jr(self.instr.get_flag(ALUFlag::C)) },
+            0x38 => { self.instr.jr(self.mem, self.instr.get_flag(ALUFlag::C)) },
             // ADD HL, SP
-            0x39 => { self.instr.add(HL, SP); 2 },
+            0x39 => { self.instr.add(self.mem, HL, SP); 2 },
             // LD A, (HL-)
-            0x3A => { self.instr.ld_dec(); 2 },
+            0x3A => { self.instr.ld_dec(self.mem); 2 },
             // DEC SP
             0x3B => { self.instr.dec(SP); 2 },
             // INC A
@@ -159,7 +163,7 @@ impl<'a> CPU<'a> {
             // DEC A
             0x3D => { self.instr.dec(A); 1 },
             // LD A, u8
-            0x3E => { self.instr.ld_rb(A); 2 },
+            0x3E => { self.instr.ld_rb(self.mem, A); 2 },
             // CCF
             0x3F => { self.instr.ccf(); 1 },
             // LD B, B
@@ -175,7 +179,7 @@ impl<'a> CPU<'a> {
             // LD B, L
             0x45 => { self.instr.ld_rr(B, L); 1 },
             // LD B, (HL)
-            0x46 => { self.instr.ld_rm(B, HL); 2 },
+            0x46 => { self.instr.ld_rm(self.mem, B, HL); 2 },
             // LD B, A
             0x47 => { self.instr.ld_rr(B, A); 1 },
             // LD C, B
@@ -191,7 +195,7 @@ impl<'a> CPU<'a> {
             // LD C, L
             0x4D => { self.instr.ld_rr(C, L); 1 },
             // LD C, (HL)
-            0x4E => { self.instr.ld_rm(C, HL); 2 },
+            0x4E => { self.instr.ld_rm(self.mem, C, HL); 2 },
             // LD C, A
             0x4F => { self.instr.ld_rr(C, A); 1 },
             // LD D, B
@@ -207,7 +211,7 @@ impl<'a> CPU<'a> {
             // LD D, L
             0x55 => { self.instr.ld_rr(D, L); 1 },
             // LD D, (HL)
-            0x56 => { self.instr.ld_rm(D, HL); 2 },
+            0x56 => { self.instr.ld_rm(self.mem, D, HL); 2 },
             // LD D, A
             0x57 => { self.instr.ld_rr(D, A); 1 },
             // LD E, B
@@ -223,7 +227,7 @@ impl<'a> CPU<'a> {
             // LD E, L
             0x5D => { self.instr.ld_rr(E, L); 1 },
             // LD E, (HL)
-            0x5E => { self.instr.ld_rm(E, HL); 2 },
+            0x5E => { self.instr.ld_rm(self.mem, E, HL); 2 },
             // LD E, A
             0x5F => { self.instr.ld_rr(E, A); 1 },
             // LD H, B
@@ -239,7 +243,7 @@ impl<'a> CPU<'a> {
             // LD H, L
             0x65 => { self.instr.ld_rr(H, L); 1 },
             // LD H, (HL)
-            0x66 => { self.instr.ld_rm(H, HL); 2 },
+            0x66 => { self.instr.ld_rm(self.mem, H, HL); 2 },
             // LD H, A
             0x67 => { self.instr.ld_rr(H, A); 1 },
             // LD L, B
@@ -255,25 +259,25 @@ impl<'a> CPU<'a> {
             // LD L, L
             0x6D => { self.instr.ld_rr(L, L); 1 },
             // LD L, (HL)
-            0x6E => { self.instr.ld_rm(L, HL); 2 },
+            0x6E => { self.instr.ld_rm(self.mem, L, HL); 2 },
             // LD L, A
             0x6F => { self.instr.ld_rr(L, A); 1 },
             // LD (HL), B
-            0x70 => { self.instr.ld_mr(HL, B); 2 },
+            0x70 => { self.instr.ld_mr(self.mem, HL, B); 2 },
             // LD (HL), C
-            0x71 => { self.instr.ld_mr(HL, C); 2 },
+            0x71 => { self.instr.ld_mr(self.mem, HL, C); 2 },
             // LD (HL), D
-            0x72 => { self.instr.ld_mr(HL, D); 2 },
+            0x72 => { self.instr.ld_mr(self.mem, HL, D); 2 },
             // LD (HL), E
-            0x73 => { self.instr.ld_mr(HL, E); 2 },
+            0x73 => { self.instr.ld_mr(self.mem, HL, E); 2 },
             // LD (HL), H
-            0x74 => { self.instr.ld_mr(HL, H); 2 },
+            0x74 => { self.instr.ld_mr(self.mem, HL, H); 2 },
             // LD (HL), L
-            0x75 => { self.instr.ld_mr(HL, L); 2 },
+            0x75 => { self.instr.ld_mr(self.mem, HL, L); 2 },
             // HALT
             0x76 => { self.instr.halt(); 1 },
             // LD (HL), A
-            0x77 => { self.instr.ld_mr(HL, A); 2 },
+            0x77 => { self.instr.ld_mr(self.mem, HL, A); 2 },
             // LD A, B
             0x78 => { self.instr.ld_rr(A, B); 1 },
             // LD A, C
@@ -287,250 +291,250 @@ impl<'a> CPU<'a> {
             // LD A, L
             0x7D => { self.instr.ld_rr(A, L); 1 },
             // LD A, (HL)
-            0x7E => { self.instr.ld_rm(A, HL); 2 },
+            0x7E => { self.instr.ld_rm(self.mem, A, HL); 2 },
             // LD A, A
             0x7F => { 1 },
             // ADD A, B
-            0x80 => { self.instr.add(A, B); 2 },
+            0x80 => { self.instr.add(self.mem, A, B); 2 },
             // ADD A, C
-            0x81 => { self.instr.add(A, C); 2 },
+            0x81 => { self.instr.add(self.mem, A, C); 2 },
             // ADD A, D
-            0x82 => { self.instr.add(A, D); 2 },
+            0x82 => { self.instr.add(self.mem, A, D); 2 },
             // ADD A, E
-            0x83 => { self.instr.add(A, E); 2 },
+            0x83 => { self.instr.add(self.mem, A, E); 2 },
             // ADD A, H
-            0x84 => { self.instr.add(A, H); 2 },
+            0x84 => { self.instr.add(self.mem, A, H); 2 },
             // ADD A, L
-            0x85 => { self.instr.add(A, L); 2 },
+            0x85 => { self.instr.add(self.mem, A, L); 2 },
             // ADD A, (HL)
-            0x86 => { self.instr.add(A, HL); 2 },
+            0x86 => { self.instr.add(self.mem, A, HL); 2 },
             // ADD A, A
-            0x87 => { self.instr.add(A, A); 2 },
+            0x87 => { self.instr.add(self.mem, A, A); 2 },
             // ADC A, B
-            0x88 => { self.instr.adc(B); 2 },
+            0x88 => { self.instr.adc(self.mem, B); 2 },
             // ADC A, C
-            0x89 => { self.instr.adc(C); 2 },
+            0x89 => { self.instr.adc(self.mem, C); 2 },
             // ADC A, D
-            0x8A => { self.instr.adc(D); 2 },
+            0x8A => { self.instr.adc(self.mem, D); 2 },
             // ADC A, E
-            0x8B => { self.instr.adc(E); 2 },
+            0x8B => { self.instr.adc(self.mem, E); 2 },
             // ADC A, H
-            0x8C => { self.instr.adc(H); 2 },
+            0x8C => { self.instr.adc(self.mem, H); 2 },
             // ADC A, L
-            0x8D => { self.instr.adc(L); 2 },
+            0x8D => { self.instr.adc(self.mem, L); 2 },
             // ADC A, (HL)
-            0x8E => { self.instr.adc(HL); 2 },
+            0x8E => { self.instr.adc(self.mem, HL); 2 },
             // ADC A, A
-            0x8F => { self.instr.adc(A); 2 },
+            0x8F => { self.instr.adc(self.mem, A); 2 },
             // SUB B
-            0x90 => { self.instr.sub(A, B); 1 },
+            0x90 => { self.instr.sub(self.mem, A, B); 1 },
             // SUB C
-            0x91 => { self.instr.sub(A, C); 1 },
+            0x91 => { self.instr.sub(self.mem, A, C); 1 },
             // SUB D
-            0x92 => { self.instr.sub(A, D); 1 },
+            0x92 => { self.instr.sub(self.mem, A, D); 1 },
             // SUB E
-            0x93 => { self.instr.sub(A, E); 1 },
+            0x93 => { self.instr.sub(self.mem, A, E); 1 },
             // SUB H
-            0x94 => { self.instr.sub(A, H); 1 },
+            0x94 => { self.instr.sub(self.mem, A, H); 1 },
             // SUB L
-            0x95 => { self.instr.sub(A, L); 1 },
+            0x95 => { self.instr.sub(self.mem, A, L); 1 },
             // SUB (HL)
-            0x96 => { self.instr.sub(A, HL); 2 },
+            0x96 => { self.instr.sub(self.mem, A, HL); 2 },
             // SUB A
-            0x97 => { self.instr.sub(A, A); 1 },
+            0x97 => { self.instr.sub(self.mem, A, A); 1 },
             // SBC A, B
-            0x98 => { self.instr.sbc(B); 1 },
+            0x98 => { self.instr.sbc(self.mem, B); 1 },
             // SBC A, C
-            0x99 => { self.instr.sbc(C); 1 },
+            0x99 => { self.instr.sbc(self.mem, C); 1 },
             // SBC A, D
-            0x9A => { self.instr.sbc(D); 1 },
+            0x9A => { self.instr.sbc(self.mem, D); 1 },
             // SBC A, E
-            0x9B => { self.instr.sbc(E); 1 },
+            0x9B => { self.instr.sbc(self.mem, E); 1 },
             // SBC A, H
-            0x9C => { self.instr.sbc(H); 1 },
+            0x9C => { self.instr.sbc(self.mem, H); 1 },
             // SBC A, L
-            0x9D => { self.instr.sbc(L); 1 },
+            0x9D => { self.instr.sbc(self.mem, L); 1 },
             // SBC A, (HL)
-            0x9E => { self.instr.sbc(HL); 2 },
+            0x9E => { self.instr.sbc(self.mem, HL); 2 },
             // SBC A, A
-            0x9F => { self.instr.sbc(A); 1 },
+            0x9F => { self.instr.sbc(self.mem, A); 1 },
             // AND B
-            0xA0 => { self.instr.and(B); 1 },
+            0xA0 => { self.instr.and(self.mem, B); 1 },
             // AND C
-            0xA1 => { self.instr.and(C); 1 },
+            0xA1 => { self.instr.and(self.mem, C); 1 },
             // AND D
-            0xA2 => { self.instr.and(D); 1 },
+            0xA2 => { self.instr.and(self.mem, D); 1 },
             // AND E
-            0xA3 => { self.instr.and(E); 1 },
+            0xA3 => { self.instr.and(self.mem, E); 1 },
             // AND H
-            0xA4 => { self.instr.and(H); 1 },
+            0xA4 => { self.instr.and(self.mem, H); 1 },
             // AND L
-            0xA5 => { self.instr.and(L); 1 },
+            0xA5 => { self.instr.and(self.mem, L); 1 },
             // AND (HL)
-            0xA6 => { self.instr.and(HL); 2 },
+            0xA6 => { self.instr.and(self.mem, HL); 2 },
             // AND A
-            0xA7 => { self.instr.and(A); 1 },
+            0xA7 => { self.instr.and(self.mem, A); 1 },
             // XOR B
-            0xA8 => { self.instr.xor(B); 1 },
+            0xA8 => { self.instr.xor(self.mem, B); 1 },
             // XOR C
-            0xA9 => { self.instr.xor(C); 1 },
+            0xA9 => { self.instr.xor(self.mem, C); 1 },
             // XOR D
-            0xAA => { self.instr.xor(D); 1 },
+            0xAA => { self.instr.xor(self.mem, D); 1 },
             // XOR E
-            0xAB => { self.instr.xor(E); 1 },
+            0xAB => { self.instr.xor(self.mem, E); 1 },
             // XOR H
-            0xAC => { self.instr.xor(H); 1 },
+            0xAC => { self.instr.xor(self.mem, H); 1 },
             // XOR L
-            0xAD => { self.instr.xor(L); 1 },
+            0xAD => { self.instr.xor(self.mem, L); 1 },
             // XOR (HL)
-            0xAE => { self.instr.xor(HL); 2 },
+            0xAE => { self.instr.xor(self.mem, HL); 2 },
             // XOR A
-            0xAF => { self.instr.xor(A); 1 },
+            0xAF => { self.instr.xor(self.mem, A); 1 },
             // OR B
-            0xB0 => { self.instr.or(B); 1 },
+            0xB0 => { self.instr.or(self.mem, B); 1 },
             // OR C
-            0xB1 => { self.instr.or(C); 1 },
+            0xB1 => { self.instr.or(self.mem, C); 1 },
             // OR D
-            0xB2 => { self.instr.or(D); 1 },
+            0xB2 => { self.instr.or(self.mem, D); 1 },
             // OR E
-            0xB3 => { self.instr.or(E); 1 },
+            0xB3 => { self.instr.or(self.mem, E); 1 },
             // OR H
-            0xB4 => { self.instr.or(H); 1 },
+            0xB4 => { self.instr.or(self.mem, H); 1 },
             // OR L
-            0xB5 => { self.instr.or(L); 1 },
+            0xB5 => { self.instr.or(self.mem, L); 1 },
             // OR (HL)
-            0xB6 => { self.instr.or(HL); 2 },
+            0xB6 => { self.instr.or(self.mem, HL); 2 },
             // OR A
-            0xB7 => { self.instr.or(A); 1 },
+            0xB7 => { self.instr.or(self.mem, A); 1 },
             // CP B
-            0xB8 => { self.instr.cp(B); 1 },
+            0xB8 => { self.instr.cp(self.mem, B); 1 },
             // CP C
-            0xB9 => { self.instr.cp(C); 1 },
+            0xB9 => { self.instr.cp(self.mem, C); 1 },
             // CP D
-            0xBA => { self.instr.cp(D); 1 },
+            0xBA => { self.instr.cp(self.mem, D); 1 },
             // CP E
-            0xBB => { self.instr.cp(E); 1 },
+            0xBB => { self.instr.cp(self.mem, E); 1 },
             // CP H
-            0xBC => { self.instr.cp(H); 1 },
+            0xBC => { self.instr.cp(self.mem, H); 1 },
             // CP L
-            0xBD => { self.instr.cp(L); 1 },
+            0xBD => { self.instr.cp(self.mem, L); 1 },
             // CP (HL)
-            0xBE => { self.instr.cp(HL); 2 },
+            0xBE => { self.instr.cp(self.mem, HL); 2 },
             // CP A
-            0xBF => { self.instr.cp(A); 1 },
+            0xBF => { self.instr.cp(self.mem, A); 1 },
             // RET NZ
-            0xC0 => { self.instr.retc(!self.instr.get_flag(ALUFlag::Z)) },
+            0xC0 => { self.instr.retc(self.mem, !self.instr.get_flag(ALUFlag::Z)) },
             // POP BC
-            0xC1 => { self.instr.pop(BC); 3 },
+            0xC1 => { self.instr.pop(self.mem, BC); 3 },
             // JP NZ, a16
-            0xC2 => { self.instr.jp(!self.instr.get_flag(ALUFlag::Z)) },
+            0xC2 => { self.instr.jp(self.mem, !self.instr.get_flag(ALUFlag::Z)) },
             // JP a16
-            0xC3 => { self.instr.jp(true) },
+            0xC3 => { self.instr.jp(self.mem, true) },
             // CALL NZ, a16
-            0xC4 => { self.instr.call(!self.instr.get_flag(ALUFlag::Z)) },
+            0xC4 => { self.instr.call(self.mem, !self.instr.get_flag(ALUFlag::Z)) },
             // PUSH BC
-            0xC5 => { self.instr.push(BC); 4 },
+            0xC5 => { self.instr.push(self.mem, BC); 4 },
             // ADD A, d8
-            0xC6 => { self.instr.add_val(A); 2 },
+            0xC6 => { self.instr.add_val(self.mem, A); 2 },
             // RST 0
-            0xC7 => { self.instr.rst(0); 4 },
+            0xC7 => { self.instr.rst(self.mem, 0); 4 },
             // RET Z
-            0xC8 => { self.instr.retc(self.instr.get_flag(ALUFlag::Z)) },
+            0xC8 => { self.instr.retc(self.mem, self.instr.get_flag(ALUFlag::Z)) },
             // RET
-            0xC9 => { self.instr.ret(); 4 },
+            0xC9 => { self.instr.ret(self.mem); 4 },
             // JP Z, a16
-            0xCA => { self.instr.jp(self.instr.get_flag(ALUFlag::Z)) },
+            0xCA => { self.instr.jp(self.mem, self.instr.get_flag(ALUFlag::Z)) },
             // CB Instruction
             0xCB => { self.exec_cb() },
             // CALL Z, a16
-            0xCC => { self.instr.call(self.instr.get_flag(ALUFlag::Z)) },
+            0xCC => { self.instr.call(self.mem, self.instr.get_flag(ALUFlag::Z)) },
             // CALL a16
-            0xCD => { self.instr.call(true) },
+            0xCD => { self.instr.call(self.mem, true) },
             // ADC d8
-            0xCE => { self.instr.adc_val(); 2 },
+            0xCE => { self.instr.adc_val(self.mem); 2 },
             // RST 1
-            0xCF => { self.instr.rst(1); 4 },
+            0xCF => { self.instr.rst(self.mem, 1); 4 },
             // RET NC
-            0xD0 => { self.instr.retc(!self.instr.get_flag(ALUFlag::C)) },
+            0xD0 => { self.instr.retc(self.mem, !self.instr.get_flag(ALUFlag::C)) },
             // POP DE
-            0xD1 => { self.instr.pop(DE); 3 },
+            0xD1 => { self.instr.pop(self.mem, DE); 3 },
             // JP NC, a16
-            0xD2 => { self.instr.jp(!self.instr.get_flag(ALUFlag::C)) },
+            0xD2 => { self.instr.jp(self.mem, !self.instr.get_flag(ALUFlag::C)) },
             // CALL NC, a16
-            0xD4 => { self.instr.call(!self.instr.get_flag(ALUFlag::C)) },
+            0xD4 => { self.instr.call(self.mem, !self.instr.get_flag(ALUFlag::C)) },
             // PUSH DE
-            0xD5 => { self.instr.push(DE); 4 },
+            0xD5 => { self.instr.push(self.mem, DE); 4 },
             // SUB d8
-            0xD6 => { self.instr.sub_val(A); 2 },
+            0xD6 => { self.instr.sub_val(self.mem, A); 2 },
             // RST 2
-            0xD7 => { self.instr.rst(2); 4 },
+            0xD7 => { self.instr.rst(self.mem, 2); 4 },
             // RET C
-            0xD8 => { self.instr.retc(self.instr.get_flag(ALUFlag::C)) },
+            0xD8 => { self.instr.retc(self.mem, self.instr.get_flag(ALUFlag::C)) },
             // RETI
-            0xD9 => { self.instr.reti(); 4 },
+            0xD9 => { self.instr.reti(self.mem); 4 },
             // JP C, a16
-            0xDA => { self.instr.jp(self.instr.get_flag(ALUFlag::C)) },
+            0xDA => { self.instr.jp(self.mem, self.instr.get_flag(ALUFlag::C)) },
             // CALL C, a16
-            0xDC => { self.instr.call(self.instr.get_flag(ALUFlag::C)) },
+            0xDC => { self.instr.call(self.mem, self.instr.get_flag(ALUFlag::C)) },
             // SBC d8
-            0xDE => { self.instr.sbc_val(); 2 },
+            0xDE => { self.instr.sbc_val(self.mem); 2 },
             // RST 3
-            0xDF => { self.instr.rst(3); 4 },
+            0xDF => { self.instr.rst(self.mem, 3); 4 },
             // LD (a8), A
-            0xE0 => { self.instr.ld_mbr(A); 3 },
+            0xE0 => { self.instr.ld_mbr(self.mem, A); 3 },
             // POP HL
-            0xE1 => { self.instr.pop(HL); 3 },
+            0xE1 => { self.instr.pop(self.mem, HL); 3 },
             // LD (C), A
-            0xE2 => { self.instr.ld_mrc(); 2 },
+            0xE2 => { self.instr.ld_mrc(self.mem); 2 },
             // PUSH HL
-            0xE5 => { self.instr.push(HL); 4 },
+            0xE5 => { self.instr.push(self.mem, HL); 4 },
             // AND d8
-            0xE6 => { self.instr.and_val(); 2 },
+            0xE6 => { self.instr.and_val(self.mem); 2 },
             // RST 4
-            0xE7 => { self.instr.rst(4); 4 },
+            0xE7 => { self.instr.rst(self.mem, 4); 4 },
             // ADD SP, s8
-            0xE8 => { self.instr.add_stack(); 4 },
+            0xE8 => { self.instr.add_stack(self.mem); 4 },
             // JP (HL)
             0xE9 => { self.instr.jp_hl(); 4 },
             // LD (a16), A
-            0xEA => { self.instr.ld_mwr(A); 4 },
+            0xEA => { self.instr.ld_mwr(self.mem, A); 4 },
             // XOR d8
-            0xEE => { self.instr.xor_val(); 2 },
+            0xEE => { self.instr.xor_val(self.mem); 2 },
             // RST 5
-            0xEF => { self.instr.rst(5); 4 },
+            0xEF => { self.instr.rst(self.mem, 5); 4 },
             // LD A, (a8)
-            0xF0 => { self.instr.ld_rmb(A); 3 },
+            0xF0 => { self.instr.ld_rmb(self.mem, A); 3 },
             // POP AF
-            0xF1 => { self.instr.pop(AF); 3 },
+            0xF1 => { self.instr.pop(self.mem, AF); 3 },
             // LD A, (C)
-            0xF2 => { self.instr.ld_rmc(); 2 },
+            0xF2 => { self.instr.ld_rmc(self.mem); 2 },
             // DI
             0xF3 => { self.instr.di(); 1 },
             // PUSH AF
-            0xF5 => { self.instr.push(AF); 4 },
+            0xF5 => { self.instr.push(self.mem, AF); 4 },
             // OR d8
-            0xF6 => { self.instr.or_val(); 2 },
+            0xF6 => { self.instr.or_val(self.mem); 2 },
             // RST 6
-            0xF7 => { self.instr.rst(6); 4 },
+            0xF7 => { self.instr.rst(self.mem, 6); 4 },
             // LD HL, SP+s8
-            0xF8 => { self.instr.add_stack(); 3 },
+            0xF8 => { self.instr.add_stack(self.mem); 3 },
             // LD SP, HL
             0xF9 => { self.instr.ld_rrw(SP, HL); 2 },
             // LD A, (a16)
-            0xFA => { self.instr.ld_rmw(A); 4 },
+            0xFA => { self.instr.ld_rmw(self.mem, A); 4 },
             // EI
             0xFB => {self.instr.ei(); 1 },
             // CP d8
-            0xFE => { self.instr.cp_val(); 2 },
+            0xFE => { self.instr.cp_val(self.mem); 2 },
             // RST 7
-            0xFF => { self.instr.rst(7); 4 },
+            0xFF => { self.instr.rst(self.mem, 7); 4 },
             _other => { panic!("[ERROR] invalid opcode") }
 
         }
     }
 
-    fn exec_cb(&mut self) -> u8 {
-        let opcode = self.instr.fetch();
+    fn exec_cb(&mut self) -> u16 {
+        let opcode = self.instr.fetch(self.mem);
         match opcode {
             // RLC B
             0x00 => { self.instr.rlc(B); 2 },
@@ -545,7 +549,7 @@ impl<'a> CPU<'a> {
             // RLC L
             0x05 => { self.instr.rlc(L); 2 },
             // RLC (HL)
-            0x06 => { self.instr.rlc_mem(HL); 4 },
+            0x06 => { self.instr.rlc_mem(self.mem, HL); 4 },
             // RLC A
             0x07 => { self.instr.rlc(A); 2 },
             // RRC B
@@ -561,7 +565,7 @@ impl<'a> CPU<'a> {
             // RRC L
             0x0D => { self.instr.rrc(L); 2 },
             // RRC (HL)
-            0x0E => { self.instr.rrc_mem(HL); 4 },
+            0x0E => { self.instr.rrc_mem(self.mem, HL); 4 },
             // RRC A
             0x0F => { self.instr.rrc(A); 2 },
             // RL B
@@ -577,7 +581,7 @@ impl<'a> CPU<'a> {
             // RL L
             0x15 => { self.instr.rl(L); 2 },
             // RL (HL)
-            0x16 => { self.instr.rl_mem(HL); 4 },
+            0x16 => { self.instr.rl_mem(self.mem, HL); 4 },
             // RL A
             0x17 => { self.instr.rl(A); 2 },
             // RR B
@@ -593,7 +597,7 @@ impl<'a> CPU<'a> {
             // RR L
             0x1D => { self.instr.rr(L); 2 },
             // RR (HL)
-            0x1E => { self.instr.rr_mem(HL); 4 },
+            0x1E => { self.instr.rr_mem(self.mem, HL); 4 },
             // RR A
             0x1F => { self.instr.rr(A); 2 },
             // SLA B
@@ -609,7 +613,7 @@ impl<'a> CPU<'a> {
             // SLA L
             0x25 => { self.instr.sla(L); 2 },
             // SLA (HL)
-            0x26 => { self.instr.sla_mem(HL); 4 },
+            0x26 => { self.instr.sla_mem(self.mem, HL); 4 },
             // SLA A
             0x27 => { self.instr.sla(A); 2 },
             // SRA B
@@ -625,7 +629,7 @@ impl<'a> CPU<'a> {
             // SRA L
             0x2D => { self.instr.sra(L); 2 },
             // SRA (HL)
-            0x2E => { self.instr.sra_mem(HL); 4 },
+            0x2E => { self.instr.sra_mem(self.mem, HL); 4 },
             // SRA A
             0x2F => { self.instr.sra(A); 2 },
             // SWAP B
@@ -641,7 +645,7 @@ impl<'a> CPU<'a> {
             // SWAP L
             0x35 => { self.instr.swap(L); 2 },
             // SWAP (HL)
-            0x36 => { self.instr.swap_mem(HL); 4 },
+            0x36 => { self.instr.swap_mem(self.mem, HL); 4 },
             // SWAP A
             0x37 => { self.instr.swap(A); 2 },
             // SRL B
@@ -657,7 +661,7 @@ impl<'a> CPU<'a> {
             // SRL L
             0x3D => { self.instr.srl(L); 2 },
             // SRL (HL)
-            0x3E => { self.instr.srl_mem(HL); 4 },
+            0x3E => { self.instr.srl_mem(self.mem, HL); 4 },
             // SRL A
             0x3F => { self.instr.srl(A); 2 },
             // BIT 0, B
@@ -673,7 +677,7 @@ impl<'a> CPU<'a> {
             // BIT 0, L
             0x45 => { self.instr.bit(0, L); 2 },
             // BIT 0, (HL)
-            0x46 => { self.instr.bit_mem(0, HL); 4 },
+            0x46 => { self.instr.bit_mem(self.mem, 0, HL); 4 },
             // BIT 0, A
             0x47 => { self.instr.bit(0, A); 2 },
             // BIT 1, B
@@ -689,7 +693,7 @@ impl<'a> CPU<'a> {
             // BIT 1, L
             0x4D => { self.instr.bit(1, L); 2 },
             // BIT 1, (HL)
-            0x4E => { self.instr.bit_mem(1, HL); 4 },
+            0x4E => { self.instr.bit_mem(self.mem, 1, HL); 4 },
             // BIT 1, A
             0x4F => { self.instr.bit(1, A); 2 },
             // BIT 2, B
@@ -705,7 +709,7 @@ impl<'a> CPU<'a> {
             // BIT 2, L
             0x55 => { self.instr.bit(2, L); 2 },
             // BIT 2, (HL)
-            0x56 => { self.instr.bit_mem(2, HL); 4 },
+            0x56 => { self.instr.bit_mem(self.mem, 2, HL); 4 },
             // BIT 2, A
             0x57 => { self.instr.bit(2, A); 2 },
             // BIT 3, B
@@ -721,7 +725,7 @@ impl<'a> CPU<'a> {
             // BIT 3, L
             0x5D => { self.instr.bit(3, L); 2 },
             // BIT 3, (HL)
-            0x5E => { self.instr.bit_mem(3, HL); 4 },
+            0x5E => { self.instr.bit_mem(self.mem, 3, HL); 4 },
             // BIT 3, A
             0x5F => { self.instr.bit(3, A); 2 },
             // BIT 4, B
@@ -737,7 +741,7 @@ impl<'a> CPU<'a> {
             // BIT 4, L
             0x65 => { self.instr.bit(4, L); 2 },
             // BIT 4, (HL)
-            0x66 => { self.instr.bit_mem(4, HL); 4 },
+            0x66 => { self.instr.bit_mem(self.mem, 4, HL); 4 },
             // BIT 4, A
             0x67 => { self.instr.bit(4, A); 2 },
             // BIT 5, B
@@ -753,7 +757,7 @@ impl<'a> CPU<'a> {
             // BIT 5, L
             0x6D => { self.instr.bit(5, L); 2 },
             // BIT 5, (HL)
-            0x6E => { self.instr.bit_mem(5, HL); 4 },
+            0x6E => { self.instr.bit_mem(self.mem, 5, HL); 4 },
             // BIT 5, A
             0x6F => { self.instr.bit(5, A); 2 },
             // BIT 6, B
@@ -769,7 +773,7 @@ impl<'a> CPU<'a> {
             // BIT 6, L
             0x75 => { self.instr.bit(6, L); 2 },
             // BIT 6, (HL)
-            0x76 => { self.instr.bit_mem(6, HL); 4 },
+            0x76 => { self.instr.bit_mem(self.mem, 6, HL); 4 },
             // BIT 6, A
             0x77 => { self.instr.bit(6, A); 2 },
             // BIT 7, B
@@ -785,7 +789,7 @@ impl<'a> CPU<'a> {
             // BIT 7, L
             0x7D => { self.instr.bit(7, L); 2 },
             // BIT 7, (HL)
-            0x7E => { self.instr.bit_mem(7, HL); 4 },
+            0x7E => { self.instr.bit_mem(self.mem, 7, HL); 4 },
             // BIT 7, A
             0x7F => { self.instr.bit(7, A); 2 },
             // RES 0, B
@@ -801,7 +805,7 @@ impl<'a> CPU<'a> {
             // RES 0, L
             0x85 => { self.instr.res(0, L); 2 },
             // RES 0, (HL)
-            0x86 => { self.instr.res_mem(0, HL); 4 },
+            0x86 => { self.instr.res_mem(self.mem, 0, HL); 4 },
             // RES 0, A
             0x87 => { self.instr.res(0, A); 2 },
             // RES 1, B
@@ -817,7 +821,7 @@ impl<'a> CPU<'a> {
             // RES 1, L
             0x8D => { self.instr.res(1, L); 2 },
             // RES 1, (HL)
-            0x8E => { self.instr.res_mem(1, HL); 4 },
+            0x8E => { self.instr.res_mem(self.mem, 1, HL); 4 },
             // RES 1, A
             0x8F => { self.instr.res(1, A); 2 },
             // RES 2, B
@@ -833,7 +837,7 @@ impl<'a> CPU<'a> {
             // RES 2, L
             0x95 => { self.instr.res(2, L); 2 },
             // RES 2, (HL)
-            0x96 => { self.instr.res_mem(2, HL); 4 },
+            0x96 => { self.instr.res_mem(self.mem, 2, HL); 4 },
             // RES 2, A
             0x97 => { self.instr.res(2, A); 2 },
             // RES 3, B
@@ -849,7 +853,7 @@ impl<'a> CPU<'a> {
             // RES 3, L
             0x9D => { self.instr.res(3, L); 2 },
             // RES 3, (HL)
-            0x9E => { self.instr.res_mem(3, HL); 4 },
+            0x9E => { self.instr.res_mem(self.mem, 3, HL); 4 },
             // RES 3, A
             0x9F => { self.instr.res(3, A); 2 },
             // RES 4, B
@@ -865,7 +869,7 @@ impl<'a> CPU<'a> {
             // RES 4, L
             0xA5 => { self.instr.res(4, L); 2 },
             // RES 4, (HL)
-            0xA6 => { self.instr.res_mem(4, HL); 4 },
+            0xA6 => { self.instr.res_mem(self.mem, 4, HL); 4 },
             // RES 4, A
             0xA7 => { self.instr.res(4, A); 2 },
             // RES 5, B
@@ -881,7 +885,7 @@ impl<'a> CPU<'a> {
             // RES 5, L
             0xAD => { self.instr.res(5, L); 2 },
             // RES 5, (HL)
-            0xAE => { self.instr.res_mem(5, HL); 4 },
+            0xAE => { self.instr.res_mem(self.mem, 5, HL); 4 },
             // RES 5, A
             0xAF => { self.instr.res(5, A); 2 },
             // RES 6, B
@@ -897,7 +901,7 @@ impl<'a> CPU<'a> {
             // RES 6, L
             0xB5 => { self.instr.res(6, L); 2 },
             // RES 6, (HL)
-            0xB6 => { self.instr.res_mem(6, HL); 4 },
+            0xB6 => { self.instr.res_mem(self.mem, 6, HL); 4 },
             // RES 6, A
             0xB7 => { self.instr.res(6, A); 2 },
             // RES 7, B
@@ -913,7 +917,7 @@ impl<'a> CPU<'a> {
             // RES 7, L
             0xBD => { self.instr.res(7, L); 2 },
             // RES 7, (HL)
-            0xBE => { self.instr.res_mem(7, HL); 4 },
+            0xBE => { self.instr.res_mem(self.mem, 7, HL); 4 },
             // RES 7, A
             0xBF => { self.instr.res(7, A); 2 },
             // SET 0, B
@@ -929,7 +933,7 @@ impl<'a> CPU<'a> {
             // SET 0, L
             0xC5 => { self.instr.set(0, L); 2 },
             // SET 0, (HL)
-            0xC6 => { self.instr.set_mem(0, HL); 4 },
+            0xC6 => { self.instr.set_mem(self.mem, 0, HL); 4 },
             // SET 0, A
             0xC7 => { self.instr.set(0, A); 2 },
             // SET 1, B
@@ -945,7 +949,7 @@ impl<'a> CPU<'a> {
             // SET 1, L
             0xCD => { self.instr.set(1, L); 2 },
             // SET 1, (HL)
-            0xCE => { self.instr.set_mem(1, HL); 4 },
+            0xCE => { self.instr.set_mem(self.mem, 1, HL); 4 },
             // SET 1, A
             0xCF => { self.instr.set(1, A); 2 },
             // SET 2, B
@@ -961,7 +965,7 @@ impl<'a> CPU<'a> {
             // SET 2, L
             0xD5 => { self.instr.set(2, L); 2 },
             // SET 2, (HL)
-            0xD6 => { self.instr.set_mem(2, HL); 4 },
+            0xD6 => { self.instr.set_mem(self.mem, 2, HL); 4 },
             // SET 2, A
             0xD7 => { self.instr.set(2, A); 2 },
             // SET 3, B
@@ -977,7 +981,7 @@ impl<'a> CPU<'a> {
             // SET 3, L
             0xDD => { self.instr.set(3, L); 2 },
             // SET 3, (HL)
-            0xDE => { self.instr.set_mem(3, HL); 4 },
+            0xDE => { self.instr.set_mem(self.mem, 3, HL); 4 },
             // SET 3, A
             0xDF => { self.instr.set(3, A); 2 },
             // SET 4, B
@@ -993,7 +997,7 @@ impl<'a> CPU<'a> {
             // SET 4, L
             0xE5 => { self.instr.set(4, L); 2 },
             // SET 4, (HL)
-            0xE6 => { self.instr.set_mem(4, HL); 4 },
+            0xE6 => { self.instr.set_mem(self.mem, 4, HL); 4 },
             // SET 4, A
             0xE7 => { self.instr.set(4, A); 2 },
             // SET 5, B
@@ -1009,7 +1013,7 @@ impl<'a> CPU<'a> {
             // SET 5, L
             0xED => { self.instr.set(5, L); 2 },
             // SET 5, (HL)
-            0xEE => { self.instr.set_mem(5, HL); 4 },
+            0xEE => { self.instr.set_mem(self.mem, 5, HL); 4 },
             // SET 5, A
             0xEF => { self.instr.set(5, A); 2 },
             // SET 6, B
@@ -1025,7 +1029,7 @@ impl<'a> CPU<'a> {
             // SET 6, L
             0xF5 => { self.instr.set(6, L); 2 },
             // SET 6, (HL)
-            0xF6 => { self.instr.set_mem(6, HL); 4 },
+            0xF6 => { self.instr.set_mem(self.mem, 6, HL); 4 },
             // SET 6, A
             0xF7 => { self.instr.set(6, A); 2 },
             // SET 7, B
@@ -1041,7 +1045,7 @@ impl<'a> CPU<'a> {
             // SET 7, L
             0xFD => { self.instr.set(7, L); 2 },
             // SET 7, (HL)
-            0xFE => { self.instr.set_mem(7, HL); 4 },
+            0xFE => { self.instr.set_mem(self.mem, 7, HL); 4 },
             // SET 7, A
             0xFF => { self.instr.set(7, A); 2 },
         }
@@ -1063,7 +1067,7 @@ impl<'a> CPU<'a> {
     // All interrupts are enabled/disabled via register at address 0xFFFF
     // Timer Registers
     // 0xFF04 -- DIV --- Divider Register --- increments at freq. 16384 Hz. Resets if written to.
-    // 0xFF05 -- TIMA -- Timer Counter ------ increments at freq. of TAC. Resets at overflow to TMA value and triggers interrupt. CPU jumps to 0x50 at TIMA overflow, where the next instruction is read.
+    // 0xFF05 -- TIMA -- Timer Counter ------ increments at freq. of TAC. Resets at overflow to TMA value and triggers interrupt. Cpu jumps to 0x50 at TIMA overflow, where the next instruction is read.
     // 0xFF06 -- TMA --- Timer Mod ---------- contains an offset value for the timer to restart with
     // 0xFF07 -- TAC --- Timer Control
     //                   0 (Stop)     00 -- 4096 Hz
@@ -1071,7 +1075,7 @@ impl<'a> CPU<'a> {
     //                                10 -- 65536 Hz
     //                                11 -- 16384 Hz
 
-    //Stalls CPU until interrupt is triggered, at which point HALT is broken and CPU switches to interrupt vector. After the interrupt returns, instructions continue immediately following the halt.
+    //Stalls Cpu until interrupt is triggered, at which point HALT is broken and Cpu switches to interrupt vector. After the interrupt returns, instructions continue immediately following the halt.
     //pub fn halt() {}
 
     // these two are interrupt enablers
