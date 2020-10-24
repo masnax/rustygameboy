@@ -2,7 +2,6 @@ mod instructions;
 mod cb_instructions;
 use crate::memory::Memory;
 use crate::register::{ALUFlag, REG::*, Register};
-use crate::display;
 use instructions::InstructionSet;
 use cb_instructions::CBInstructionSet;
 //single core
@@ -20,18 +19,12 @@ impl<'a> Cpu<'a> {
         }
     }
 
-    pub fn get_frame_info(&mut self) -> Vec<u32>  {
-        display::get_frame(self.mem)
+    pub fn cycle(&mut self, cycles: u16) -> u16 {
+        return self.exec() + self.mem.lcdc.cycle(cycles);
     }
 
-    pub fn cycle(&mut self, cycles: u16) -> u16 {
-        if cycles == 0x1C8 {
-            let lcdc_ly: u8 = self.mem.read_byte(0xFF44);
-            self.mem.write_byte(0xFF44, lcdc_ly+1);
-            return self.exec();
-        } else {
-            return cycles + self.exec();
-        }
+    pub fn get_frame(&self) -> &[u32]  {
+        self.mem.lcdc.get_background()
     }
 
     // Returns number of cycles

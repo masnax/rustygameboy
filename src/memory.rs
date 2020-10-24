@@ -1,20 +1,23 @@
 use std::path::PathBuf;
 use crate::cartridge::Cartridge;
+use crate::display::LcdController;
 
-const TILE_SET_SIZE: usize = 0x1800;
-const BG_SIZE: usize = 0x800;
-const SRAM_SIZE: usize = 0xA0;
-const RAM_SIZE: usize = 0x2000;
+pub const TILE_SET_SIZE: usize = 0x1800;
+pub const BG_SIZE: usize = 0x800;
+pub const SRAM_SIZE: usize = 0xA0;
+pub const RAM_SIZE: usize = 0x2000;
 const HEADER_SIZE: usize = 0x100;
 const ZRAM_SIZE: usize= 0x80;
 pub type Header = [u8; HEADER_SIZE];
 
 pub struct Memory {
+    pub lcdc: LcdController,
     header: Header,
     cartridge: Cartridge,
-    pub tile_ram: [u8; TILE_SET_SIZE],
-    pub bg_ram: [u8; BG_SIZE],
-    pub sprite_ram: [u8; SRAM_SIZE],
+    dma: u8,
+    tile_ram: [u8; TILE_SET_SIZE],
+    bg_ram: [u8; BG_SIZE],
+    sprite_ram: [u8; SRAM_SIZE],
     ram: [u8; RAM_SIZE],
     zram: [u8; ZRAM_SIZE],
     pub io_ram: [u8; 0x80],
@@ -28,6 +31,8 @@ impl Memory {
         let mut header: Header = [0; HEADER_SIZE];
         header.copy_from_slice(&boot_rom[..HEADER_SIZE]);
         let cartridge: Cartridge = Cartridge::load(PathBuf::from(filename));
+        let lcdc: LcdController = LcdController::init();
+        let dma: u8 = 0;
         let ram = [0; RAM_SIZE];
         let zram = [0; ZRAM_SIZE];
         let tile_ram = [0; TILE_SET_SIZE];
@@ -35,7 +40,7 @@ impl Memory {
         let sprite_ram = [0; SRAM_SIZE];
         let io_ram = [0; 0x80];
         let interrupt = 0;
-        Memory { header, cartridge, tile_ram, bg_ram, sprite_ram, ram, zram, io_ram, interrupt, }
+        Memory { header, cartridge, lcdc, dma, tile_ram, bg_ram, sprite_ram, ram, zram, io_ram, interrupt, }
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
@@ -127,7 +132,12 @@ impl Memory {
     }
 
     fn write_tile(&mut self, addr: u16, value: u8) {
-        self.tile_ram[(addr & 0x1FFF) as usize] = value;
+        let offset_addr: u16 = addr & 0x1FFF;
+        self.tile_ram[offset_addr as usize] = value;
+        let tile_addr: u16 = offset_addr & 0xFFFE;
+        let byte_1: u8 = self.read_tile(tile_addr);
+        let byte_2: u8 = self.read_tile(tile_addr + 1);
+        self.lcdc.update_tiles(tile_addr, byte_1, byte_2);
     }
 
     fn read_bg(&self, addr: u16) -> u8 {
@@ -135,7 +145,10 @@ impl Memory {
     }
 
     fn write_bg(&mut self, addr: u16, value: u8) {
-        self.bg_ram[(addr & 0x7FF) as usize] = value;
+        println!("Writing Logo...");
+        let offset_addr: usize = (addr & 0x7FF) as usize;
+        self.bg_ram[offset_addr] = value;
+        self.lcdc.map_background(offset_addr, value);
     }
 
     fn read_sprite(&self, addr: u16) -> u8 {
@@ -147,19 +160,23 @@ impl Memory {
     }
 
     fn read_io(&self, addr: u16) -> u8 {
-        self.io_ram[(addr & 0x7F) as usize]
+        match addr {
+            0xFF46 => { self.dma },
+            0xFF40 ..= 0xFF4B => { self.lcdc.read(addr) },
+            _ => { self.io_ram[(addr & 0x7F) as usize] }
+        }
     }
 
     fn write_io(&mut self, addr: u16, value: u8) {
-        if addr == 0xFF44 {
-            if value < 0x9A {
-                self.io_ram[(addr & 0x7F) as usize] = value;
-            } else {
-                self.io_ram[(addr & 0x7F) as usize] = 0;
-            }
-        } else {
-            self.io_ram[(addr & 0x7F) as usize] = value;
+        match addr {
+            0xFF46 => { self.dma_transfer(value); }
+            0xFF40 ..= 0xFF4B => { self.lcdc.write(addr, value) },
+            _ => { self.io_ram[(addr & 0x7F) as usize] = value; }
         }
+    }
+    
+    fn dma_transfer(&mut self, value: u8) {
+        self.dma = value;
     }
 }
 

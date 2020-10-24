@@ -26,8 +26,8 @@ fn main() {
     let mut cycles: u16 = 0;
     while window.is_open() {
         cycles = c.cycle(cycles);
-        let frame: Vec<u32> = c.get_frame_info();
-        let _ = window.update_with_buffer(&frame, 256, 256);
+        let frame: &[u32] = c.get_frame();
+        let _ = window.update_with_buffer(frame, 256, 256);
     }
 //    cpu::run();
 }
