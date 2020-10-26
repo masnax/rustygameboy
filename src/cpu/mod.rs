@@ -23,7 +23,7 @@ impl<'a> Cpu<'a> {
         return self.exec() + self.mem.lcdc.cycle(cycles);
     }
 
-    pub fn get_frame(&self) -> &[u32]  {
+    pub fn get_frame(&mut self) -> &[u32] {
         self.mem.lcdc.get_background()
     }
 

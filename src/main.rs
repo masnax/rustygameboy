@@ -19,7 +19,7 @@ fn main() {
   //  let tile_set = tile::TileSet::init(&mut mem);
     let mut c: cpu::Cpu = cpu::Cpu::init(register, &mut mem);
 
-    let mut window = Window::new("Maw Boy", 160, 144,
+    let mut window = Window::new("Maw Boy", 256, 256,
         WindowOptions { scale: Scale::X2, ..Default::default()}
         ).expect("Error Creating Window");
 
