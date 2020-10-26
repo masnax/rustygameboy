@@ -14,7 +14,7 @@ pub struct LcdController {
     window_bank_offset: u16,
     window_enable: bool,
     tile_bank_offset: u16,
-    bg_bank_offset: u16,
+    bg_bank_offset: usize,
     sprite_size: u8,
     sprite_enable: bool,
     blank: bool,
@@ -44,7 +44,7 @@ impl<'a> LcdController {
             tile_set: TileSet::init(),
             background: vec![pixel_to_u32(WHITE); 0x10000],
             viewport: vec![0; 0x5A00],
-            bg_map: vec![0;0x400],
+            bg_map: vec![0;0x800],
 
             display_enable: false,
             window_bank_offset: 0,
@@ -147,7 +147,7 @@ impl<'a> LcdController {
             self.window_bank_offset = 0x400 * (((lcdc & 0x40) == 0x40) as u16);
             self.window_enable = (lcdc & 0x20) == 0x20;
             self.tile_bank_offset = 0x800 * (((lcdc & 0x10) == 0x10) as u16);
-            self.bg_bank_offset = 0x400 * (((lcdc & 0x8) == 0x8) as u16);
+            self.bg_bank_offset = 0x400 * (((lcdc & 0x8) == 0x8) as usize);
             self.sprite_size = 0x8 * (1 + (((lcdc & 0x4) == 0x4) as u8));
             self.sprite_enable = (lcdc & 0x2) == 0x2;
             self.blank = (lcdc & 0x1) == 0x1;
@@ -177,8 +177,13 @@ impl<'a> LcdController {
     }
 
     pub fn map_background(&mut self, map_index: usize, tile_index: usize) {
-        self.bg_map[map_index] = tile_index;
-        self.map_tile(map_index, tile_index);
+        if map_index < 0x400 {
+            self.bg_map[map_index] = tile_index;
+            self.map_tile(map_index, tile_index);
+        } else if self.bg_bank_offset > 0 {
+            self.bg_map[map_index - self.bg_bank_offset] = tile_index;
+            self.map_tile(map_index - self.bg_bank_offset, tile_index);
+        }
     }
 
     pub fn map_tile(&mut self, map_index: usize, tile_index: usize) {
