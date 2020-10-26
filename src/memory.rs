@@ -12,7 +12,6 @@ pub type Header = [u8; HEADER_SIZE];
 
 pub struct Memory {
     pub lcdc: LcdController,
-    pub time: std::time::SystemTime,
     header: Header,
     cartridge: Cartridge,
     dma: u8,
@@ -29,7 +28,6 @@ pub struct Memory {
 
 impl Memory {
     pub fn init(boot_rom: Vec<u8>, filename: &str) -> Memory {
-        let time = std::time::SystemTime::now();
         let mut header: Header = [0; HEADER_SIZE];
         header.copy_from_slice(&boot_rom[..HEADER_SIZE]);
         let cartridge: Cartridge = Cartridge::load(PathBuf::from(filename));
@@ -42,7 +40,7 @@ impl Memory {
         let sprite_ram = [0; SRAM_SIZE];
         let io_ram = [0; 0x80];
         let interrupt = 0;
-        Memory { header, time, cartridge, lcdc, dma, tile_ram, bg_ram, sprite_ram, ram, zram, io_ram, interrupt, }
+        Memory { header, cartridge, lcdc, dma, tile_ram, bg_ram, sprite_ram, ram, zram, io_ram, interrupt, }
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
@@ -147,7 +145,7 @@ impl Memory {
     }
 
     fn write_bg(&mut self, addr: u16, value: u8) {
-        println!("Writing Logo...{:?}", std::time::SystemTime::now().duration_since(self.time));
+        //println!("Writing Logo...{:?}", std::time::SystemTime::now().duration_since(self.time));
         let offset_addr: usize = (addr & 0x7FF) as usize;
         self.bg_ram[offset_addr] = value;
         self.lcdc.map_background(offset_addr, value as usize);

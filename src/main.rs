@@ -19,15 +19,16 @@ fn main() {
   //  let tile_set = tile::TileSet::init(&mut mem);
     let mut c: cpu::Cpu = cpu::Cpu::init(register, &mut mem);
 
-    let mut window = Window::new("Maw Boy", 256, 256,
+    let mut window = Window::new("Maw Boy", 160, 144,
         WindowOptions { scale: Scale::X2, ..Default::default()}
         ).expect("Error Creating Window");
 
-    let mut cycles: u16 = 0;
+    let mut cycles = 0;
+    window.limit_update_rate(Some(std::time::Duration::new(0,0)));
     while window.is_open() {
         cycles = c.cycle(cycles);
-        let frame: &[u32] = c.get_frame();
-        let _ = window.update_with_buffer(frame, 256, 256);
+            let frame: &[u32] = c.get_frame();
+            let _ = window.update_with_buffer(frame, 160, 144);
     }
 //    cpu::run();
 }

@@ -34,6 +34,9 @@ impl<'a> InstructionSet {
         } else {
             let value: u8 = self.r.get_byte(id);
             let sub: u8 = value.wrapping_sub(1);
+            //if id == C || id == E {
+            //println!("DEC {:?} --> {:?}", value, sub);
+            //}
             self.r.set_byte(id, sub);
             self.r.update_flag(ALUFlag::Z, sub == 0);
             self.r.update_flag(ALUFlag::N, true);
@@ -332,6 +335,7 @@ impl<'a> InstructionSet {
         let val: u8 = self.fetch(mem);
         let a = self.r.get_byte(A);
         let cp_a = a.wrapping_sub(val);
+        //println!("CP: {:X} -- {:?}", a, cp_a == 0);
         self.r.update_flag(ALUFlag::Z, cp_a == 0);
         self.r.update_flag(ALUFlag::N, true);
         self.r.update_flag(ALUFlag::H, (a & 0xF) < (val & 0xF));
@@ -357,6 +361,7 @@ impl<'a> InstructionSet {
         //println!("JR, {:?}, 0x{:X}", flag, steps);
         if flag {
             self.r.set_word(PC, self.r.get_word(PC).wrapping_add(steps as u16));
+            //println!("JR: 0x{:04X}", self.r.get_word(PC));
             3
         } else {
             2
@@ -487,6 +492,15 @@ impl<'a> InstructionSet {
     pub fn ld_mbr(&mut self, mem: &'a mut Memory, r: REG) {
         let mb: u8 = self.fetch(mem);
         let full_addr: u16 = 0xFF00 | (mb as u16);
+       // if full_addr == 0xff44 {
+       //     if r == A {
+       //         println!("LD (0xFF44), A: {:?}", self.r.get_byte(r));
+       //     } else {
+       //         println!("BAD");
+       //     }
+       // } else if full_addr == 0xff42 {
+       //         println!("LD (0xFF42), A: {:?}", self.r.get_byte(r));
+       // }
         mem.write_byte(full_addr, self.r.get_byte(r));
     }
 
@@ -498,6 +512,11 @@ impl<'a> InstructionSet {
     pub fn ld_rmb(&mut self, mem: &'a mut Memory, r: REG) {
         let mb: u8 = self.fetch(mem);
         let full_addr: u16 = 0xFF00 | (mb as u16);
+        //if full_addr == 0xff44 {
+        //    if r == A {
+        //        println!("LD A, (0xFF44): {:?}", mem.read_byte(full_addr));
+        //    }
+        //}
         self.r.set_byte(r, mem.read_byte(full_addr));
     }
 
