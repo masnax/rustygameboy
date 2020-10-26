@@ -24,11 +24,14 @@ fn main() {
         ).expect("Error Creating Window");
 
     let mut cycles = 0;
-    window.limit_update_rate(Some(std::time::Duration::new(0,0)));
+    window.limit_update_rate(None);
+    //window.limit_update_rate(Some(std::time::Duration::new(1,0)));
     while window.is_open() {
-        cycles = c.cycle(cycles);
+        if cycles == 0 {
             let frame: &[u32] = c.get_frame();
             let _ = window.update_with_buffer(frame, 160, 144);
+        }
+        cycles = c.cycle(cycles);
     }
 //    cpu::run();
 }

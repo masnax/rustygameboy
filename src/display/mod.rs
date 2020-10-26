@@ -1,7 +1,7 @@
 pub mod tile;
 use tile::*;
 
-const FRAME_FREQ: u16 = 0x1;
+const FRAME_FREQ: u16 = 0x1C8;
 const LY_MAX: u8 = 0x9B;
 
 pub struct LcdController {
@@ -75,14 +75,19 @@ impl<'a> LcdController {
     }
 
     pub fn cycle(&mut self, cycles: u16) -> u16 {
-        //if self.display_enable {
+        if self.display_enable {
             if cycles >= FRAME_FREQ {
                 self.lcd_mode = (self.lcd_mode + 1) % 4;
                 self.ly = (self.ly + 1) % LY_MAX;
-        //    }
+            }
+            if self.ly < 0x90 {
+                let row: usize = ((self.ly + self.scy) as usize) * 0x100;
+                let viewport_row: usize = (self.ly as usize) * 0xA0;
+                for col in 0..0xA0 {
+                    self.viewport[viewport_row + col] = self.background[row + col + (self.scx as usize)];
+                }
+            }
         }
-
-//        println!(" Cycles: {:?} {:?} -- {:?}", cycles, cycles % FRAME_FREQ, self.ly);
             return cycles % FRAME_FREQ;
     }
 
@@ -123,7 +128,7 @@ impl<'a> LcdController {
         match addr {
             0xFF40 => { self.set_lcdc(value); },
             0xFF41 => { self.set_stat(value); },
-            0xFF42 => {             println!("VAL: {:?}", value); self.scy = value; },
+            0xFF42 => { self.scy = value; },
             0xFF43 => { self.scx = value; },
             0xFF44 => { self.ly = 0; },
             0xFF45 => { self.cycle_compare(value); },
@@ -188,13 +193,6 @@ impl<'a> LcdController {
     }
 
     pub fn get_background(&mut self) -> &[u32] {
-        if self.display_enable && self.ly < 0x90 {
-            let row: usize = ((self.ly + self.scy) as usize) * 0x100;
-            let viewport_row: usize = (self.ly as usize) * 0xA0;
-            for col in 0..0xA0 {
-                self.viewport[viewport_row + col] = self.background[row + col + (self.scx as usize)];
-            }
-        }
         return &self.viewport;
     }
 

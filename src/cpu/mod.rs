@@ -20,7 +20,8 @@ impl<'a> Cpu<'a> {
     }
 
     pub fn cycle(&mut self, cycles: u16) -> u16 {
-        return self.exec() + self.mem.lcdc.cycle(cycles);
+        let exec_cycles: u16 = self.exec();
+        return self.mem.lcdc.cycle(cycles + exec_cycles);
     }
 
     pub fn get_frame(&mut self) -> &[u32] {
