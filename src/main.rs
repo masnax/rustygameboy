@@ -27,10 +27,10 @@ fn main() {
         WindowOptions { scale: Scale::X2, ..Default::default()}
         ).expect("Error Creating Window");
 
-    let sleep_time = std::time::Duration::from_millis(16);
+    let sleep_time = std::time::Duration::from_millis(0);
     window.limit_update_rate(Some(sleep_time));
     while window.is_open() {
-        match c.cycle() {
+        match c.cycle(window.get_keys()) {
             Some(frame) => {
                 let _ = window.update_with_buffer(frame, WIDTH, HEIGHT);
             },

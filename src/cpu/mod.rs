@@ -1,5 +1,6 @@
 mod instructions;
 mod cb_instructions;
+use minifb::Key;
 use crate::memory::Memory;
 use crate::register::{ALUFlag, REG::*, Register};
 use instructions::InstructionSet;
@@ -58,11 +59,12 @@ impl<'a> Cpu<'a> {
         return 0;
     }
 
-    pub fn cycle(&mut self) -> Option<&[u32]> {
+    pub fn cycle(&mut self, keys: Option<Vec<Key>>) -> Option<&[u32]> {
         while self.mem.lcdc.drawing_display {
             self.cycles = (self.cycles + self.handle_interrupt() + self.exec()) % FULL_ROTATION;
             let (lcd_interrupts, rotate_cycles) = self.mem.lcdc.cycle(self.cycles);
             self.cycles -= rotate_cycles;
+            self.mem.joypad.check_keypress(keys.clone());
             self.mem.set_interrupt(lcd_interrupts);
         }
         return self.mem.lcdc.get_viewport();
