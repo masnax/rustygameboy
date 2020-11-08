@@ -24,7 +24,7 @@ pub struct Memory {
     boot_mode: bool,
     interrupt_enable: u8,
     interrupt_flag: u8,
-    joypad: Joypad,
+    pub joypad: Joypad,
 }
 
 
@@ -160,6 +160,7 @@ impl Memory {
         if !self.lcdc.vram_locked() {
             let offset_addr: u16 = addr & 0x1FFF;
             self.tile_ram[offset_addr as usize] = value;
+            self.lcdc.tile_ram[offset_addr as usize] = value;
             let tile_addr: u16 = offset_addr & 0xFFFE;
             let byte_1: u8 = self.read_tile(tile_addr);
             let byte_2: u8 = self.read_tile(tile_addr + 1);
@@ -177,6 +178,7 @@ impl Memory {
     fn write_bg(&mut self, addr: u16, value: u8) {
         if !self.lcdc.vram_locked() {
             let offset_addr: usize = (addr & 0x7FF) as usize;
+            self.lcdc.bg_ram[offset_addr] = value;
             self.bg_ram[offset_addr] = value;
             self.lcdc.map_background(offset_addr, value as usize);
         }

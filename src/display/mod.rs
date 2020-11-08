@@ -10,7 +10,13 @@ const VRAM_INTERRUPT_CYCLES: u32 = 172;
 const LCD_INTERRUPT: u8 = 0x2;
 const VBLANK_INTERRUPT: u8 = 0x1;
 
+pub const TILE_SET_SIZE: usize = 0x1800;
+pub const BG_SIZE: usize = 0x800;
 pub struct LcdController {
+    
+    pub tile_ram: [u8; TILE_SET_SIZE],
+    pub bg_ram: [u8; BG_SIZE],
+    tile_addrs: [u8; 0x800],
     tile_set: TileSet,
     sprites: Sprites,
     background: Vec<u32>,
@@ -48,6 +54,9 @@ pub struct LcdController {
 impl<'a> LcdController {
     pub fn init() -> LcdController {
         LcdController {
+            tile_ram: [0; TILE_SET_SIZE],
+            bg_ram: [0; BG_SIZE],
+            tile_addrs: [0; 0x800],
             tile_set: TileSet::init(),
             sprites: Sprites::init(),
             background: vec![pixel_to_u32(WHITE); 0x20000],
@@ -82,7 +91,7 @@ impl<'a> LcdController {
         }
     }
 
-    fn compare_coincidence(&mut self) -> bool {
+    pub fn compare_coincidence(&mut self) -> bool {
         self.coincidence_interrupt_mode = self.lyc == self.ly;
         return self.coincidence_interrupt_enable && self.coincidence_interrupt_mode;
     }
@@ -101,10 +110,14 @@ impl<'a> LcdController {
         let mut interrupts: u8 = 0;
         if self.display_enable {
             if cycles >= VBLANK_INTERRUPT_CYCLES && self.lcd_mode == 1 {
+                if self.compare_coincidence() {
+                    interrupts |= LCD_INTERRUPT;
+                }
+
                 if self.ly == 144 {
                     interrupts |= VBLANK_INTERRUPT;
                     self.drawing_display = false;
-                    if self.mode_1_int_enabled || self.compare_coincidence() {
+                    if self.mode_1_int_enabled {
                         interrupts |= LCD_INTERRUPT;
                     }
                 }
@@ -184,7 +197,7 @@ impl<'a> LcdController {
             0xFF42 => { self.scy = value; },
             0xFF43 => { self.scx = value; },
             0xFF44 => { if !self.display_enable { self.ly = 0}; },
-            0xFF45 => { self.cycle_compare(value); },
+            0xFF45 => { self.lyc = value; },
             0xFF47 => { self.bg_palette = value; },
             0xFF48 => { self.sprite_palette_0 = value; },
             0xFF49 => { self.sprite_palette_1 = value; },
@@ -213,17 +226,117 @@ impl<'a> LcdController {
         self.mode_0_int_enabled = (stat & 0x8) == 0x8;
     }
 
-    fn cycle_compare(&mut self, value: u8) {
-        self.lyc = value;
-        self.coincidence_interrupt_mode = self.lyc == self.ly;
+    fn render_tiles(&mut self) {
+        let scanline = self.ly;
+
+        let scroll_y = self.scy;
+        let scroll_x = self.scx;
+        let window_y = self.wy;
+        let window_x = self.wx.wrapping_sub(7);
+
+        let using_window = self.window_enable && window_y <= scanline;
+
+        let (tile_data, unsigned): (u16, bool) = if !self.signed_tiles {
+            (0x0, true)
+        } else {
+            (0x800, false)
+        };
+
+        let background_mem = if using_window {
+            if self.window_bank == 1 {
+                0x400
+            } else {
+                0x0
+            }
+        } else {
+            if self.bg_bank == 1{
+                0x400
+            } else {
+                0x0
+            }
+        };
+
+        let y_pos = if using_window {
+            scanline.wrapping_sub(window_y)
+        } else {
+            scroll_y.wrapping_add(scanline)
+        };
+
+        let tile_row: u16 = (y_pos / 8) as u16 * 32;
+
+        for pixel in 0..160 {
+            let pixel = pixel as u8;
+            let x_pos = if using_window && pixel >= window_x {
+                pixel.wrapping_sub(window_x)
+            } else {
+                pixel.wrapping_add(scroll_x)
+            };
+
+            let tile_col = (x_pos / 8) as u16;
+
+            let tile_address = background_mem + tile_row + tile_col;
+
+            let tile_num: i16 = if unsigned {
+                self.bg_ram[tile_address as usize] as u16 as i16
+            } else {
+                self.bg_ram[tile_address as usize] as i8 as i16
+            };
+
+            let tile_location: u16 = if unsigned {
+                tile_data + (tile_num as u16 * 16)
+            } else {
+                tile_data + ((tile_num + 128) * 16) as u16
+            };
+
+            let line = (y_pos as u16 % 8) * 2;
+            let data1 = self.tile_ram[(tile_location + line) as usize];
+            let data2 = self.tile_ram[(tile_location + line + 1) as usize];
+
+            let color_bit = ((x_pos as i32 % 8) - 7) * -1;
+
+            let color_num = ((data2 >> color_bit) & 0b1) << 1;
+            let color_num = color_num | ((data1 >> color_bit) & 0b1);
+
+            let color = self.get_color(color_num, self.bg_palette);
+            let offset = (160*(scanline as u32)) + (pixel as u32);
+            self.viewport[offset as usize] = pixel_to_u32(color);
+
+        }
     }
+    
+    fn get_color(&self, color_id: u8, palette_num: u8) -> Pixel {
+
+        let (hi, lo) = match color_id {
+            0 => (1, 0),
+            1 => (3, 2),
+            2 => (5, 4),
+            3 => (7, 6),
+            _ => panic!("Invalid color id: 0x{:x}", color_id),
+        };
+
+        let color = ((palette_num >> hi) & 0b1) << 1;
+        let color = color | ((palette_num >> lo) & 0b1);
+
+        match color {
+            0 => WHITE,
+            1 => LIGHT_GRAY,
+            2 => DARK_GRAY,
+            3 => BLACK,
+            _ => panic!("Invalid color: 0x{:x}", color),
+        }
+    }
+
+
+
+
 
     fn draw_one_line(&mut self) {
         if self.display_enable {
             if self.blank {
                 self.draw_bg_line();
+                //self.render_tiles();
             } else {
-                self.viewport = vec![pixel_to_u32(WHITE); 0x5A00];
+               //self.viewport = vec![pixel_to_u32(WHITE); 0x5A00];
             }
 
             if self.sprite_enable {
@@ -280,7 +393,7 @@ impl<'a> LcdController {
     }
 
     fn draw_bg_line(&mut self) {
-        let window: bool = self.window_enable && self.wy <= self.ly && self.wx < 160;
+        let window: bool = self.window_enable && self.wy <= self.ly;
         let bank: usize = (if window { self.window_bank } else { self.bg_bank }) * 0x10000;
         let y_offset: usize = if window {
             self.ly.wrapping_sub(self.wy)
@@ -290,6 +403,9 @@ impl<'a> LcdController {
 
         let wx: u8 = self.wx.wrapping_sub(7);
         let viewport_row: usize = (self.ly as usize) * 0xA0;
+        for i in 0..self.bg_ram.len() {
+            self.map_background(i, self.bg_ram[i] as usize);
+        }
         for col in 0..0xA0 {
             let scx: u8 = if window { wx } else { self.scx };
             let x: u8 = (col as u8).wrapping_add(scx);
@@ -305,9 +421,17 @@ impl<'a> LcdController {
 
     pub fn update_tiles(&mut self, addr: u16, byte_1: u8, byte_2: u8) {
         self.tile_set.update(addr, byte_1, byte_2);
+        let ti = addr >> 4;
+
+        match self.tile_addrs.iter().position(|&t| t == ti as u8) {
+            None => { },
+            Some(i) => { self.map_background(i, ti as usize); },
+        }
     }
 
     pub fn map_background(&mut self, map_index: usize, tile_index: usize) {
+      //  print!("boop ");
+        self.tile_addrs[map_index] = tile_index as u8;
         for i in 0..(TILE_SIZE * TILE_SIZE) {
             let row_offset = (TILE_SIZE * map_index) + ((map_index / 0x20) * 0x100 * 0x7);
             let col: usize = i % TILE_SIZE;
