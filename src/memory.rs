@@ -5,20 +5,20 @@ use crate::joypad::Joypad;
 
 pub const TILE_SET_SIZE: usize = 0x1800;
 pub const BG_SIZE: usize = 0x800;
-pub const SRAM_SIZE: usize = 0xA0;
+pub const OAM_SIZE: usize = 0xA0;
 pub const RAM_SIZE: usize = 0x2000;
 const HEADER_SIZE: usize = 0x100;
 const ZRAM_SIZE: usize= 0x80;
 pub type Header = [u8; HEADER_SIZE];
 
 pub struct Memory {
-    pub lcdc: LcdController,
     header: Header,
     cartridge: Cartridge,
+    pub lcdc: LcdController,
     dma: u8,
     tile_ram: [u8; TILE_SET_SIZE],
     bg_ram: [u8; BG_SIZE],
-    sprite_ram: [u8; SRAM_SIZE],
+    sprite_ram: [u8; OAM_SIZE],
     ram: [u8; RAM_SIZE],
     zram: [u8; ZRAM_SIZE],
     boot_mode: bool,
@@ -33,19 +33,22 @@ impl Memory {
     pub fn init(boot_rom: Vec<u8>, filename: &str) -> Memory {
         let mut header: Header = [0; HEADER_SIZE];
         header.copy_from_slice(&boot_rom[..HEADER_SIZE]);
-        let cartridge: Cartridge = Cartridge::load(PathBuf::from(filename));
-        let lcdc: LcdController = LcdController::init();
-        let dma: u8 = 0;
-        let ram = [0; RAM_SIZE];
-        let zram = [0; ZRAM_SIZE];
-        let tile_ram = [0; TILE_SET_SIZE];
-        let bg_ram = [0; BG_SIZE];
-        let sprite_ram = [0; SRAM_SIZE];
-        let interrupt_enable = 0;
-        let interrupt_flag = 0;
-        let boot_mode = true;
-        let joypad = Joypad::init();
-        Memory { header, cartridge, lcdc, dma, tile_ram, bg_ram, sprite_ram, ram, zram, joypad, interrupt_enable, interrupt_flag, boot_mode, }
+        Memory {
+            boot_mode: true,
+            header,
+            cartridge: Cartridge::load(PathBuf::from(filename)),
+            lcdc: LcdController::init(),
+            joypad: Joypad::init(),
+            dma: 0,
+            ram: [0; RAM_SIZE],
+            zram: [0; ZRAM_SIZE],
+            tile_ram: [0; TILE_SET_SIZE],
+            bg_ram: [0; BG_SIZE],
+            sprite_ram: [0; OAM_SIZE],
+            interrupt_enable: 0,
+            interrupt_flag: 0,
+
+        }
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
