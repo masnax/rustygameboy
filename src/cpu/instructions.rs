@@ -4,6 +4,7 @@ use crate::memory::Memory;
 pub struct InstructionSet {
     pub r: Register,
     pub halted: bool,
+    pub interrupt_enabled: bool,
 }
 
 
@@ -12,6 +13,7 @@ impl<'a> InstructionSet {
         InstructionSet {
             r: registers,
             halted: false,
+            interrupt_enabled: false,
         }
     }
 
@@ -34,14 +36,10 @@ impl<'a> InstructionSet {
         } else {
             let value: u8 = self.r.get_byte(id);
             let sub: u8 = value.wrapping_sub(1);
-            //if id == C || id == E {
-            //println!("DEC {:?} --> {:?}", value, sub);
-            //}
             self.r.set_byte(id, sub);
             self.r.update_flag(ALUFlag::Z, sub == 0);
             self.r.update_flag(ALUFlag::N, true);
             self.r.update_flag(ALUFlag::H, (value & 0xF) == 0);
-            //println!("DEC val: 0x{:X}", value);
         }
     }
 
@@ -83,7 +81,7 @@ impl<'a> InstructionSet {
             let add: u16 = previous.wrapping_add(value);
             self.r.set_word(id1, add);
             self.r.update_flag(ALUFlag::N, false);
-            self.r.update_flag(ALUFlag::H, (previous & 0xFF) + (value & 0xFF) > 0xFF);
+            self.r.update_flag(ALUFlag::H, (previous & 0xFFF) + (value & 0xFFF) > 0xFFF);
             self.r.update_flag(ALUFlag::C, previous > 0xFFFF - value);
         } else {
             let previous: u8 = self.r.get_byte(id1);
@@ -97,16 +95,16 @@ impl<'a> InstructionSet {
         }
     }
 
-    pub fn add_stack(&mut self, mem: &'a mut Memory) {
+    pub fn add_stack(&mut self, mem: &'a mut Memory, dest_id: REG) {
         let value: i8 = self.fetch(mem) as i8;
         let sp: u16 = self.r.get_word(SP);
         let value_u16: u16 = value as u16;
         let add: u16 = sp.wrapping_add(value_u16);
-        self.r.set_word(SP, add);
+        self.r.set_word(dest_id, add);
         self.r.update_flag(ALUFlag::Z, false);
         self.r.update_flag(ALUFlag::N, false);
-        self.r.update_flag(ALUFlag::H, (sp & 0xFF) + (value_u16 & 0xFF) > 0xFF);
-        self.r.update_flag(ALUFlag::C, sp > 0xFFFF - value_u16);
+        self.r.update_flag(ALUFlag::H, (sp & 0xF) + (value_u16 & 0xF) > 0xF);
+        self.r.update_flag(ALUFlag::C, (sp & 0xFF) + (value_u16 & 0xFF) > 0xFF);
     }
 
     pub fn sub(&mut self, mem: &'a mut Memory, id: REG, id2: REG) {
@@ -119,7 +117,7 @@ impl<'a> InstructionSet {
         self.r.update_flag(ALUFlag::H, (previous & 0xF) < (value & 0xF));
         self.r.update_flag(ALUFlag::C, previous < value);
     }
-    
+
     pub fn sub_val(&mut self, mem: &'a mut Memory, id: REG) {
         let value: u8 = self.fetch(mem);
         let previous: u8 = self.r.get_byte(id);
@@ -136,7 +134,7 @@ impl<'a> InstructionSet {
         let carry: bool = (value & 0x80) > 0;
         let rotate: u8 = (value << 1) | (carry as u8);
         self.r.set_byte(id, rotate);
-        self.r.update_flag(ALUFlag::Z, rotate == 0);
+        self.r.update_flag(ALUFlag::Z, false);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, false);
         self.r.update_flag(ALUFlag::C, carry);
@@ -147,7 +145,7 @@ impl<'a> InstructionSet {
         let carry: bool = (value & 0x80) > 0;
         let rotate: u8 = (value << 1) | (self.r.get_flag(ALUFlag::C) as u8);
         self.r.set_byte(id, rotate);
-        self.r.update_flag(ALUFlag::Z, rotate == 0);
+        self.r.update_flag(ALUFlag::Z, false);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, false);
         self.r.update_flag(ALUFlag::C, carry);
@@ -158,7 +156,7 @@ impl<'a> InstructionSet {
         let carry: bool = (value & 0x1) > 0;
         let rotate: u8 = (value >> 1) | ((carry as u8) << 7);
         self.r.set_byte(id, rotate);
-        self.r.update_flag(ALUFlag::Z, rotate == 0);
+        self.r.update_flag(ALUFlag::Z, false);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, false);
         self.r.update_flag(ALUFlag::C, carry);
@@ -169,7 +167,7 @@ impl<'a> InstructionSet {
         let carry: bool = (value & 0x1) > 0;
         let rotate: u8 = (value >> 1) | ((self.r.get_flag(ALUFlag::C) as u8) << 7);
         self.r.set_byte(id, rotate);
-        self.r.update_flag(ALUFlag::Z, rotate == 0);
+        self.r.update_flag(ALUFlag::Z, false);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, false);
         self.r.update_flag(ALUFlag::C, carry);
@@ -222,7 +220,7 @@ impl<'a> InstructionSet {
         self.r.update_flag(ALUFlag::Z, add == 0);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, (a & 0xF) + (value & 0xF) + c > 0xF);
-        self.r.update_flag(ALUFlag::C, (a as u16) > (0xFF as u16) - (value as u16) - (c as u16));
+        self.r.update_flag(ALUFlag::C, (a as u16) + (value as u16) + (c as u16) > 0xFF);
     }
 
     pub fn sbc(&mut self, mem: &'a mut Memory, id: REG) {
@@ -286,7 +284,7 @@ impl<'a> InstructionSet {
         self.r.update_flag(ALUFlag::Z, add == 0);
         self.r.update_flag(ALUFlag::N, false);
         self.r.update_flag(ALUFlag::H, (a & 0xF) + (val & 0xF) + c > 0xF);
-        self.r.update_flag(ALUFlag::C, (a as u16) > (0xFF as u16) - (val as u16) - (c as u16));
+        self.r.update_flag(ALUFlag::C, (a as u16) + (val as u16) + (c as u16 ) > 0xFF);
     }
 
     pub fn sbc_val(&mut self, mem: &'a mut Memory) {
@@ -335,7 +333,6 @@ impl<'a> InstructionSet {
         let val: u8 = self.fetch(mem);
         let a = self.r.get_byte(A);
         let cp_a = a.wrapping_sub(val);
-        //println!("CP: {:X} -- {:?}", a, cp_a == 0);
         self.r.update_flag(ALUFlag::Z, cp_a == 0);
         self.r.update_flag(ALUFlag::N, true);
         self.r.update_flag(ALUFlag::H, (a & 0xF) < (val & 0xF));
@@ -346,7 +343,7 @@ impl<'a> InstructionSet {
         self.r.set_word(PC, self.r.get_word(HL));
     }
 
-    pub fn jp(&mut self, mem: &'a mut Memory, flag: bool) -> u16 {
+    pub fn jp(&mut self, mem: &'a mut Memory, flag: bool) -> u32 {
         let value: u16 = (self.fetch(mem) as u16) | ((self.fetch(mem) as u16) << 8);
         if flag {
             self.r.set_word(PC, value);
@@ -356,12 +353,11 @@ impl<'a> InstructionSet {
         }
     }
 
-    pub fn jr(&mut self, mem: &'a mut Memory, flag: bool) -> u16 {
+    pub fn jr(&mut self, mem: &'a mut Memory, flag: bool) -> u32 {
         let steps: i8 = self.fetch(mem) as i8;
-        //println!("JR, {:?}, 0x{:X}", flag, steps);
         if flag {
-            self.r.set_word(PC, self.r.get_word(PC).wrapping_add(steps as u16));
-            //println!("JR: 0x{:04X}", self.r.get_word(PC));
+            let new_pc: u16 = (self.r.get_word(PC) as i16).wrapping_add(steps as i16) as u16;
+            self.r.set_word(PC, new_pc);
             3
         } else {
             2
@@ -387,7 +383,7 @@ impl<'a> InstructionSet {
         self.r.set_word(SP, sp + 2);
     }
 
-    pub fn call(&mut self, mem: &'a mut Memory, flag: bool) -> u16 {
+    pub fn call(&mut self, mem: &'a mut Memory, flag: bool) -> u32 {
         let value: u16 = (self.fetch(mem) as u16) | ((self.fetch(mem) as u16) << 8);
         if flag {
             let pc: u16 = self.r.get_word(PC);
@@ -404,16 +400,16 @@ impl<'a> InstructionSet {
         }
     }
     pub fn rst(&mut self, mem: &'a mut Memory, value: u8) {
-            let pc: u16 = self.r.get_word(PC);
-            let pc_high: u8 = ((pc & 0xff00) >> 8) as u8;
-            let pc_low: u8 = (pc & 0xff) as u8;
-            let sp: u16 = self.r.get_word(SP);
-            mem.write_byte(sp - 1, pc_high);
-            mem.write_byte(sp - 2, pc_low);
-            self.r.set_word(SP, sp - 2);
-            self.r.set_word(PC, (value * 8) as u16);
+        let pc: u16 = self.r.get_word(PC);
+        let pc_high: u8 = ((pc & 0xff00) >> 8) as u8;
+        let pc_low: u8 = (pc & 0xff) as u8;
+        let sp: u16 = self.r.get_word(SP);
+        mem.write_byte(sp - 1, pc_high);
+        mem.write_byte(sp - 2, pc_low);
+        self.r.set_word(SP, sp - 2);
+        self.r.set_word(PC, (value * 8) as u16);
     }
-    pub fn retc(&mut self, mem: &'a mut Memory, flag: bool) -> u16 {
+    pub fn retc(&mut self, mem: &'a mut Memory, flag: bool) -> u32 {
         if flag {
             let sp: u16 = self.r.get_word(SP);
             let stack_low: u16 = (mem.read_byte(sp) as u16) & 0xff;
@@ -443,17 +439,14 @@ impl<'a> InstructionSet {
         let stack_total: u16 = (stack_high << 8) | stack_low;
         self.r.set_word(PC, stack_total);
         self.r.set_word(SP, sp + 2);
+        self.interrupt_enabled = true;
 
     }
     pub fn ei(&mut self) {
-        // Interrupt Master Enable
-        // IME = 1
-        //println!("EI: TODO");
+        self.interrupt_enabled = true;
     }
     pub fn di(&mut self) {
-        // Interrupt Master Disable
-        // IME = 0
-        //println!("DI: TODO");
+        self.interrupt_enabled = false;
     }
 
     pub fn halt(&mut self) {
@@ -477,7 +470,6 @@ impl<'a> InstructionSet {
 
     pub fn ld_rw(&mut self, mem: &'a mut Memory, r: REG) {
         let w: u16 = (self.fetch(mem) as u16) | ((self.fetch(mem) as u16) << 8);
-        //println!("LD HL,  0x{:X}", w);
         self.r.set_word(r, w);
     }
 
@@ -492,15 +484,6 @@ impl<'a> InstructionSet {
     pub fn ld_mbr(&mut self, mem: &'a mut Memory, r: REG) {
         let mb: u8 = self.fetch(mem);
         let full_addr: u16 = 0xFF00 | (mb as u16);
-       // if full_addr == 0xff44 {
-       //     if r == A {
-       //         println!("LD (0xFF44), A: {:?}", self.r.get_byte(r));
-       //     } else {
-       //         println!("BAD");
-       //     }
-       // } else if full_addr == 0xff42 {
-       //         println!("LD (0xFF42), A: {:?}", self.r.get_byte(r));
-       // }
         mem.write_byte(full_addr, self.r.get_byte(r));
     }
 
@@ -512,11 +495,6 @@ impl<'a> InstructionSet {
     pub fn ld_rmb(&mut self, mem: &'a mut Memory, r: REG) {
         let mb: u8 = self.fetch(mem);
         let full_addr: u16 = 0xFF00 | (mb as u16);
-        //if full_addr == 0xff44 {
-        //    if r == A {
-        //        println!("LD A, (0xFF44): {:?}", mem.read_byte(full_addr));
-        //    }
-        //}
         self.r.set_byte(r, mem.read_byte(full_addr));
     }
 
@@ -526,12 +504,12 @@ impl<'a> InstructionSet {
     }
 
     pub fn ld_mw(&mut self, mem: &'a mut Memory, m: REG) {
-       let w: u16 = (self.fetch(mem) as u16) | ((self.fetch(mem) as u16) << 8);
-       let sp: u16 = self.r.get_word(m);
-       let sp_low: u8 = (sp & 0xFF) as u8;
-       let sp_high: u8 = ((sp & 0xFF00) >> 8) as u8;
-       mem.write_byte(w, sp_low);
-       mem.write_byte(w+1, sp_high);
+        let w: u16 = (self.fetch(mem) as u16) | ((self.fetch(mem) as u16) << 8);
+        let sp: u16 = self.r.get_word(m);
+        let sp_low: u8 = (sp & 0xFF) as u8;
+        let sp_high: u8 = ((sp & 0xFF00) >> 8) as u8;
+        mem.write_byte(w, sp_low);
+        mem.write_byte(w+1, sp_high);
     }
 
     pub fn ld_mb(&mut self, mem: &'a mut Memory, m: REG) {
@@ -591,6 +569,10 @@ impl<'a> InstructionSet {
         let byte: u8 = mem.read_byte(self.r.get_word(PC));
         self.inc(PC);
         return byte;
+    }
+
+    pub fn set_pc(&mut self, value: u16) {
+        self.r.set_word(PC, value);
     }
 }
 

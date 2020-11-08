@@ -4,10 +4,26 @@ use crate::memory::Memory;
 use crate::register::{ALUFlag, REG::*, Register};
 use instructions::InstructionSet;
 use cb_instructions::CBInstructionSet;
-//single core
+
+const FULL_ROTATION: u32 = 70224;
+
+const VBLANK: u8 = 0x1;
+const LCD_STAT: u8 = 0x2;
+const TIMER: u8 = 0x4;
+const SERIAL: u8 = 0x8;
+const JOYPAD: u8 = 0x10;
+
+const VBLANK_ADDR: u16 = 0x40;
+const LCD_STAT_ADDR: u16 = 0x48;
+const TIMER_ADDR: u16 = 0x50;
+const SERIAL_ADDR: u16 = 0x58;
+const JOYPAD_ADDR: u16 = 0x60;
+
+
 pub struct Cpu<'a> {
     instr: InstructionSet,
     mem: &'a mut Memory,
+    cycles: u32,
 }
 
 
@@ -16,20 +32,45 @@ impl<'a> Cpu<'a> {
         Cpu {
             instr: InstructionSet::init(registers),
             mem,
+            cycles: 0,
         }
     }
 
-    pub fn cycle(&mut self, cycles: u16) -> u16 {
-        let exec_cycles: u16 = self.exec();
-        return self.mem.lcdc.cycle(cycles + exec_cycles);
+    pub fn handle_interrupt(&mut self) -> u32 {
+        if self.instr.interrupt_enabled {
+            let (flag, enabled) = self.mem.get_interrupt_info();
+            let match_interrupt: u8 = flag & enabled;
+            let priority_list: Vec<(u8,u16)> = vec![(VBLANK,VBLANK_ADDR),(LCD_STAT,LCD_STAT_ADDR),
+            (TIMER,TIMER_ADDR),(SERIAL,SERIAL_ADDR),(JOYPAD,JOYPAD_ADDR)];
+
+            for (interrupt,addr) in priority_list {
+                let interrupt_active: bool = (match_interrupt & interrupt) == interrupt;
+                if interrupt_active {
+                    self.instr.halted = false;
+                    self.instr.interrupt_enabled = false;
+                    self.mem.reset_interrupt(interrupt);
+                    self.instr.push(self.mem, PC);
+                    self.instr.set_pc(addr);
+                    return 7;
+                }
+            }
+        }
+        return 0;
     }
 
-    pub fn get_frame(&mut self) -> &[u32] {
-        self.mem.lcdc.get_background()
+    pub fn cycle(&mut self) -> Option<&[u32]> {
+        while self.mem.lcdc.drawing_display {
+            self.cycles = (self.cycles + self.handle_interrupt() + self.exec()) % FULL_ROTATION;
+            let (lcd_interrupts, rotate_cycles) = self.mem.lcdc.cycle(self.cycles);
+            self.cycles -= rotate_cycles;
+            self.mem.set_interrupt(lcd_interrupts);
+        }
+        return self.mem.lcdc.get_viewport();
     }
 
     // Returns number of cycles
-    fn exec(&mut self) -> u16 {
+    fn exec(&mut self) -> u32 {
+        let _pc_poo = self.instr.r.get_word(PC);
         let opcode = if self.instr.halted {0} else {self.instr.fetch(self.mem)};
         match opcode {
             // NOP
@@ -289,37 +330,37 @@ impl<'a> Cpu<'a> {
             // LD A, A
             0x7F => { 1 },
             // ADD A, B
-            0x80 => { self.instr.add(self.mem, A, B); 2 },
+            0x80 => { self.instr.add(self.mem, A, B); 1 },
             // ADD A, C
-            0x81 => { self.instr.add(self.mem, A, C); 2 },
+            0x81 => { self.instr.add(self.mem, A, C); 1 },
             // ADD A, D
-            0x82 => { self.instr.add(self.mem, A, D); 2 },
+            0x82 => { self.instr.add(self.mem, A, D); 1 },
             // ADD A, E
-            0x83 => { self.instr.add(self.mem, A, E); 2 },
+            0x83 => { self.instr.add(self.mem, A, E); 1 },
             // ADD A, H
-            0x84 => { self.instr.add(self.mem, A, H); 2 },
+            0x84 => { self.instr.add(self.mem, A, H); 1 },
             // ADD A, L
-            0x85 => { self.instr.add(self.mem, A, L); 2 },
+            0x85 => { self.instr.add(self.mem, A, L); 1 },
             // ADD A, (HL)
             0x86 => { self.instr.add(self.mem, A, HL); 2 },
             // ADD A, A
-            0x87 => { self.instr.add(self.mem, A, A); 2 },
+            0x87 => { self.instr.add(self.mem, A, A); 1 },
             // ADC A, B
-            0x88 => { self.instr.adc(self.mem, B); 2 },
+            0x88 => { self.instr.adc(self.mem, B); 1 },
             // ADC A, C
-            0x89 => { self.instr.adc(self.mem, C); 2 },
+            0x89 => { self.instr.adc(self.mem, C); 1 },
             // ADC A, D
-            0x8A => { self.instr.adc(self.mem, D); 2 },
+            0x8A => { self.instr.adc(self.mem, D); 1 },
             // ADC A, E
-            0x8B => { self.instr.adc(self.mem, E); 2 },
+            0x8B => { self.instr.adc(self.mem, E); 1 },
             // ADC A, H
-            0x8C => { self.instr.adc(self.mem, H); 2 },
+            0x8C => { self.instr.adc(self.mem, H); 1 },
             // ADC A, L
-            0x8D => { self.instr.adc(self.mem, L); 2 },
+            0x8D => { self.instr.adc(self.mem, L); 1 },
             // ADC A, (HL)
             0x8E => { self.instr.adc(self.mem, HL); 2 },
             // ADC A, A
-            0x8F => { self.instr.adc(self.mem, A); 2 },
+            0x8F => { self.instr.adc(self.mem, A); 1 },
             // SUB B
             0x90 => { self.instr.sub(self.mem, A, B); 1 },
             // SUB C
@@ -487,9 +528,9 @@ impl<'a> Cpu<'a> {
             // RST 4
             0xE7 => { self.instr.rst(self.mem, 4); 4 },
             // ADD SP, s8
-            0xE8 => { self.instr.add_stack(self.mem); 4 },
+            0xE8 => { self.instr.add_stack(self.mem, SP); 4 },
             // JP (HL)
-            0xE9 => { self.instr.jp_hl(); 4 },
+            0xE9 => { self.instr.jp_hl(); 1 },
             // LD (a16), A
             0xEA => { self.instr.ld_mwr(self.mem, A); 4 },
             // XOR d8
@@ -511,7 +552,7 @@ impl<'a> Cpu<'a> {
             // RST 6
             0xF7 => { self.instr.rst(self.mem, 6); 4 },
             // LD HL, SP+s8
-            0xF8 => { self.instr.add_stack(self.mem); 3 },
+            0xF8 => { self.instr.add_stack(self.mem, HL); 3 },
             // LD SP, HL
             0xF9 => { self.instr.ld_rrw(SP, HL); 2 },
             // LD A, (a16)
@@ -523,11 +564,10 @@ impl<'a> Cpu<'a> {
             // RST 7
             0xFF => { self.instr.rst(self.mem, 7); 4 },
             _other => { panic!("[ERROR] invalid opcode") }
-
         }
     }
 
-    fn exec_cb(&mut self) -> u16 {
+    fn exec_cb(&mut self) -> u32 {
         let opcode = self.instr.fetch(self.mem);
         match opcode {
             // RLC B
@@ -1056,7 +1096,7 @@ impl<'a> Cpu<'a> {
     // (1) VBLANK -- LCD has drawn full frame --- Call 0x40 ---- Edit VRAM in between frames
     // (2) LCDC ---- LCD controller changed ----- Call 0x48 ---- Cause modifiable by STAT reg ; Can wait for screen to draw specific line via LYC reg
     // (3) SERIAL -- Serial Transfer completed -- Call 0x50 ---- Use of serial port for multiplayer
-    // (4) TIMER --- Serial Transfer completed -- Call 0x58 ---- Activates once the timer register overflows, then the timer resets to a predefined value, and starts moving. 
+    // (4) TIMER --- Serial Transfer completed -- Call 0x58 ---- Activates once the timer register overflows, then the timer resets to a predefined value, and starts moving.
     // (5) HiToLo -- User pressed a button ------ Call 0x60 ---- Interrupt to update action based on input. Input is still not reflected until next frame
     // All interrupts are enabled/disabled via register at address 0xFFFF
     // Timer Registers

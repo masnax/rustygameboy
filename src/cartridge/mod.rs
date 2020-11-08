@@ -15,7 +15,7 @@ pub struct Cartridge {
 
 impl Cartridge {
     pub fn load(filename: PathBuf) -> Cartridge {
-        let buf: Vec<u8> = std::fs::read(&filename).expect("MAGIC!!");
+        let buf: Vec<u8> = std::fs::read(&filename).expect("Cannot load ROM");
         let mbc_type_flag: u8 = buf[0x147];
         let bank_size_flag: u8 = buf[0x148];
         let ram_size_flag: u8 = buf[0x149];

@@ -12,10 +12,19 @@ pub struct MBC1 {
 impl MBC1 {
     pub fn init(filename: PathBuf, data: Vec<u8>, bank_size: u8, ram_size: u8, _header_checksum: u8) -> MBC1 {
         let mut swap: Vec<Vec<u8>> = Vec::with_capacity(bank_size as usize);
-        swap.push(data[..0x4000].to_vec());
-        swap.push(data[0x4000..0x8000].to_vec());
-        for _ in 2..bank_size {
-           swap.push(vec![0; 0x4000]);
+        if bank_size < 2 {
+            swap.push(data[..0x4000].to_vec());
+            swap.push(data[0x4000..0x8000].to_vec());
+        } else {
+            for i in 0..bank_size {
+                let lo: usize = (i as usize) * 0x4000;
+                let hi: usize = ((i as usize)+1) * 0x4000;
+                if data.len() >= hi {
+                    swap.push(data[lo..hi].to_vec());
+                } else {
+                    swap.push(vec![0; 0x4000]);
+                }
+            }
         }
         let active_rom_bank = 1;
         let ram_bank_mode = false;
