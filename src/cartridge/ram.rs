@@ -16,6 +16,17 @@ impl RAM {
         ram
     }
 
+    pub fn get_ram(&self) -> Option<Vec<u8>> {
+        if self.ram_size < 1 {
+            return None;
+        }
+        let mut buf: Vec<u8> = Vec::new();
+        for bank in &self.swap {
+            buf.extend_from_slice(&bank[..]);
+        }
+        return Some(buf);
+    }
+
     fn load_from_save(&mut self, filename: &PathBuf, ram_size: u8) {
         let ram_len: usize = (ram_size as usize) * 0x2000;
         let buf: Vec<u8> = match std::fs::read(filename) {

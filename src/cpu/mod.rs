@@ -61,11 +61,12 @@ impl<'a> Cpu<'a> {
 
     pub fn cycle(&mut self, keys: Option<Vec<Key>>) -> Option<&[u32]> {
         while self.mem.lcdc.drawing_display {
+            let timer_interrupt = self.mem.timer.cycle(self.cycles);
             self.cycles = (self.cycles + self.handle_interrupt() + self.exec()) % FULL_ROTATION;
             let (lcd_interrupts, rotate_cycles) = self.mem.lcdc.cycle(self.cycles);
             self.cycles -= rotate_cycles;
             self.mem.joypad.check_keypress(keys.clone());
-            self.mem.set_interrupt(lcd_interrupts);
+            self.mem.set_interrupt(lcd_interrupts | timer_interrupt);
         }
         return self.mem.lcdc.get_viewport();
     }
@@ -1087,36 +1088,5 @@ impl<'a> Cpu<'a> {
         }
 
     }
-
-
-
-
-    // **Interrupts**
-    // Only 1 active at a time
-    // PC pushed to stack
-    // Interrupts -- in race condition first in order is activated, then action is undefined
-    // (1) VBLANK -- LCD has drawn full frame --- Call 0x40 ---- Edit VRAM in between frames
-    // (2) LCDC ---- LCD controller changed ----- Call 0x48 ---- Cause modifiable by STAT reg ; Can wait for screen to draw specific line via LYC reg
-    // (3) SERIAL -- Serial Transfer completed -- Call 0x50 ---- Use of serial port for multiplayer
-    // (4) TIMER --- Serial Transfer completed -- Call 0x58 ---- Activates once the timer register overflows, then the timer resets to a predefined value, and starts moving.
-    // (5) HiToLo -- User pressed a button ------ Call 0x60 ---- Interrupt to update action based on input. Input is still not reflected until next frame
-    // All interrupts are enabled/disabled via register at address 0xFFFF
-    // Timer Registers
-    // 0xFF04 -- DIV --- Divider Register --- increments at freq. 16384 Hz. Resets if written to.
-    // 0xFF05 -- TIMA -- Timer Counter ------ increments at freq. of TAC. Resets at overflow to TMA value and triggers interrupt. Cpu jumps to 0x50 at TIMA overflow, where the next instruction is read.
-    // 0xFF06 -- TMA --- Timer Mod ---------- contains an offset value for the timer to restart with
-    // 0xFF07 -- TAC --- Timer Control
-    //                   0 (Stop)     00 -- 4096 Hz
-    //                   1 (Start)    01 -- 262144 Hz
-    //                                10 -- 65536 Hz
-    //                                11 -- 16384 Hz
-
-    //Stalls Cpu until interrupt is triggered, at which point HALT is broken and Cpu switches to interrupt vector. After the interrupt returns, instructions continue immediately following the halt.
-    //pub fn halt() {}
-
-    // these two are interrupt enablers
-    //pub fn ei() {}
-
-    //pub fn reti() {}
 }
 

@@ -19,4 +19,8 @@ impl MBC for MBC0 {
 
     // ROM type zero never writes to ROM
     fn write_byte(&mut self, _addr: u16, _value: u8) { }
+
+    fn get_ram(&self) -> Option<Vec<u8>> {
+        return None;
+    }
 }

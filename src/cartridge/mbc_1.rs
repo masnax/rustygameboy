@@ -69,5 +69,9 @@ impl MBC for MBC1 {
             _ => { }
         }
     }
+    
+    fn get_ram(&self) -> Option<Vec<u8>> {
+        return self.ram.get_ram();
+    }
 }
 

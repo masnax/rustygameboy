@@ -4,7 +4,6 @@ pub struct Joypad {
     function_active: bool,
     d_pad_active: bool,
     pressed: u8,
-    mode: u8,
 }
 
 enum Button {
@@ -24,7 +23,6 @@ impl Joypad {
             function_active: false,
             d_pad_active: false,
             pressed: 0xF,
-            mode: 0x30,
         }
     }
 

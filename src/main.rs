@@ -7,6 +7,7 @@ mod memory;
 mod display;
 mod cartridge;
 mod joypad;
+mod timer;
 
 //struct MotherBoard {
 //    cpu: cpu::Cpu
@@ -37,12 +38,6 @@ fn main() {
             None => { },
         };
     }
-//    cpu::run();
-}
-
-pub fn run() {
-    let reg: [u8; 4] = [0; 4];
-    println!("WOOOOOO {:?}",reg);
-
+    mem.save();
 }
 

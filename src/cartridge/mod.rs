@@ -10,6 +10,7 @@ pub mod mbc_5;
 
 pub struct Cartridge {
     mbc: Box<dyn MBC>,
+    filename: PathBuf,
 }
 
 
@@ -48,19 +49,24 @@ impl Cartridge {
 
         match mbc_type_flag {
             0x00 => { Cartridge {
-                mbc: Box::new(mbc_0::MBC0::init(buf, header_checksum))
+                mbc: Box::new(mbc_0::MBC0::init(buf, header_checksum)),
+                filename: save_file.clone(),
             } },
             0x01 ..= 0x03 => { Cartridge {
-                mbc: Box::new(mbc_1::MBC1::init(save_file, buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_1::MBC1::init(save_file, buf, bank_size, ram_size, header_checksum)),
+                filename: filename.clone(),
             } },
             0x05 ..= 0x06 => { Cartridge {
-                mbc: Box::new(mbc_2::MBC2::init(save_file, buf, bank_size, header_checksum))
+                mbc: Box::new(mbc_2::MBC2::init(save_file, buf, bank_size, header_checksum)),
+                filename: filename.clone(),
             } },
             0x0F ..= 0x13 => { Cartridge {
-                mbc: Box::new(mbc_3::MBC3::init(save_file, buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_3::MBC3::init(save_file, buf, bank_size, ram_size, header_checksum)),
+                filename: filename.clone(),
             } },
             0x19 ..= 0x1E => { Cartridge {
-                mbc: Box::new(mbc_5::MBC5::init(save_file, buf, bank_size, ram_size, header_checksum))
+                mbc: Box::new(mbc_5::MBC5::init(save_file, buf, bank_size, ram_size, header_checksum)),
+                filename: filename.clone(),
             } },
             _ => { panic!("hi");}
         }
@@ -73,10 +79,16 @@ impl Cartridge {
     pub fn write(&mut self, addr: u16, value: u8) {
         self.mbc.write_byte(addr, value);
     }
+
+    pub fn get_save_data(&self) -> (Option<Vec<u8>>, PathBuf) {
+        let save_file: PathBuf = self.filename.with_extension("gbsave");
+        return (self.mbc.get_ram(), save_file);
+    }
 }
 
 
 pub trait MBC {
     fn read_byte(&self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, value: u8);
+    fn get_ram(&self) -> Option<Vec<u8>>;
 }

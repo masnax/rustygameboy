@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use crate::cartridge::Cartridge;
 use crate::display::LcdController;
 use crate::joypad::Joypad;
+use crate::timer::Timer;
 
 pub const TILE_SET_SIZE: usize = 0x1800;
 pub const BG_SIZE: usize = 0x800;
@@ -15,6 +16,8 @@ pub struct Memory {
     header: Header,
     cartridge: Cartridge,
     pub lcdc: LcdController,
+    pub joypad: Joypad,
+    pub timer: Timer,
     dma: u8,
     tile_ram: [u8; TILE_SET_SIZE],
     bg_ram: [u8; BG_SIZE],
@@ -24,7 +27,6 @@ pub struct Memory {
     boot_mode: bool,
     interrupt_enable: u8,
     interrupt_flag: u8,
-    joypad: Joypad,
 }
 
 
@@ -39,6 +41,7 @@ impl Memory {
             cartridge: Cartridge::load(PathBuf::from(filename)),
             lcdc: LcdController::init(),
             joypad: Joypad::init(),
+            timer: Timer::init(),
             dma: 0,
             ram: [0; RAM_SIZE],
             zram: [0; ZRAM_SIZE],
@@ -208,7 +211,7 @@ impl Memory {
             0xFF00 => { self.joypad.read() },
             0xFF01 ..= 0xFF02 => { 0 }, // Serial Transfer
             0xFF03 => { 0 }, // Unused
-            0xFF04 ..= 0xFF07 => { 0 }, //timer
+            0xFF04 ..= 0xFF07 => { self.timer.read(addr) },
             0xFF08 ..= 0xFF0E => { 0 }, // Unused
             0xFF0F => { self.interrupt_flag },
             0xFF10 ..= 0xFF3F => { 0 }, //sound
@@ -225,8 +228,9 @@ impl Memory {
     fn write_io(&mut self, addr: u16, value: u8) {
         match addr {
             0xFF00 => { self.joypad.write(value); },
+            0xFF04 ..= 0xFF07 => { self.timer.write(addr, value); },
             0xFF0F => { self.interrupt_flag = value; },
-            0xFF46 => { self.dma_transfer(value); }
+            0xFF46 => { self.dma_transfer(value); },
             0xFF40 ..= 0xFF4B => { self.lcdc.write(addr, value) },
             0xFF50 => { self.exit_boot_mode(); },
             _ => { }
@@ -261,6 +265,16 @@ impl Memory {
 
     pub fn get_interrupt_info(&self) -> (u8, u8) {
         return (self.interrupt_flag, self.interrupt_enable);
+    }
+
+    pub fn save(&self) {
+        let (save_data, save_path) = self.cartridge.get_save_data();
+        match save_data {
+            None => { },
+            Some(buf) => {
+                let _ = std::fs::write(save_path, buf);
+            },
+        }
     }
 }
 

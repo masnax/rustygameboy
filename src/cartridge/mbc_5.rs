@@ -53,6 +53,11 @@ impl MBC for MBC5 {
             0x4000 ..= 0x5FFF => { self.ram.active_ram_bank = (value & 0xF) as usize; },
             _ => { panic!("Boop"); }
         }
+
+    }
+
+    fn get_ram(&self) -> Option<Vec<u8>> {
+        return self.ram.get_ram();
     }
 }
 

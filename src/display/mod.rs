@@ -10,7 +10,6 @@ const VRAM_INTERRUPT_CYCLES: u32 = 172;
 const LCD_INTERRUPT: u8 = 0x2;
 const VBLANK_INTERRUPT: u8 = 0x1;
 
-pub const TILE_SET_SIZE: usize = 0x1800;
 pub const BG_SIZE: usize = 0x800;
 pub struct LcdController {
     tile_addrs: [u16; BG_SIZE],
