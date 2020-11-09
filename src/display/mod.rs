@@ -10,7 +10,10 @@ const VRAM_INTERRUPT_CYCLES: u32 = 172;
 const LCD_INTERRUPT: u8 = 0x2;
 const VBLANK_INTERRUPT: u8 = 0x1;
 
+pub const TILE_SET_SIZE: usize = 0x1800;
+pub const BG_SIZE: usize = 0x800;
 pub struct LcdController {
+    tile_addrs: [u16; BG_SIZE],
     tile_set: TileSet,
     sprites: Sprites,
     background: Vec<u32>,
@@ -48,9 +51,10 @@ pub struct LcdController {
 impl<'a> LcdController {
     pub fn init() -> LcdController {
         LcdController {
+            tile_addrs: [0; BG_SIZE],
             tile_set: TileSet::init(),
             sprites: Sprites::init(),
-            background: vec![pixel_to_u32(WHITE); 0x20000],
+            background: vec![0; 0x20000],
             viewport: vec![pixel_to_u32(WHITE); 0x5A00],
 
             display_enable: false,
@@ -82,7 +86,7 @@ impl<'a> LcdController {
         }
     }
 
-    fn compare_coincidence(&mut self) -> bool {
+    pub fn compare_coincidence(&mut self) -> bool {
         self.coincidence_interrupt_mode = self.lyc == self.ly;
         return self.coincidence_interrupt_enable && self.coincidence_interrupt_mode;
     }
@@ -101,10 +105,15 @@ impl<'a> LcdController {
         let mut interrupts: u8 = 0;
         if self.display_enable {
             if cycles >= VBLANK_INTERRUPT_CYCLES && self.lcd_mode == 1 {
+                if self.compare_coincidence() {
+                    interrupts |= LCD_INTERRUPT;
+                }
+
                 if self.ly == 144 {
                     interrupts |= VBLANK_INTERRUPT;
+                    self.redraw_background();
                     self.drawing_display = false;
-                    if self.mode_1_int_enabled || self.compare_coincidence() {
+                    if self.mode_1_int_enabled {
                         interrupts |= LCD_INTERRUPT;
                     }
                 }
@@ -184,7 +193,7 @@ impl<'a> LcdController {
             0xFF42 => { self.scy = value; },
             0xFF43 => { self.scx = value; },
             0xFF44 => { if !self.display_enable { self.ly = 0}; },
-            0xFF45 => { self.cycle_compare(value); },
+            0xFF45 => { self.lyc = value; },
             0xFF47 => { self.bg_palette = value; },
             0xFF48 => { self.sprite_palette_0 = value; },
             0xFF49 => { self.sprite_palette_1 = value; },
@@ -213,17 +222,10 @@ impl<'a> LcdController {
         self.mode_0_int_enabled = (stat & 0x8) == 0x8;
     }
 
-    fn cycle_compare(&mut self, value: u8) {
-        self.lyc = value;
-        self.coincidence_interrupt_mode = self.lyc == self.ly;
-    }
-
     fn draw_one_line(&mut self) {
         if self.display_enable {
             if self.blank {
                 self.draw_bg_line();
-            } else {
-                self.viewport = vec![pixel_to_u32(WHITE); 0x5A00];
             }
 
             if self.sprite_enable {
@@ -305,16 +307,28 @@ impl<'a> LcdController {
 
     pub fn update_tiles(&mut self, addr: u16, byte_1: u8, byte_2: u8) {
         self.tile_set.update(addr, byte_1, byte_2);
+        let ti = addr >> 4;
+        match self.tile_addrs.iter().position(|&t| t == ti as u16) {
+            None => {  },
+            Some(i) => { self.map_background(i, ti as usize); },
+        }
     }
 
     pub fn map_background(&mut self, map_index: usize, tile_index: usize) {
+        self.tile_addrs[map_index] = tile_index as u16;
         for i in 0..(TILE_SIZE * TILE_SIZE) {
             let row_offset = (TILE_SIZE * map_index) + ((map_index / 0x20) * 0x100 * 0x7);
             let col: usize = i % TILE_SIZE;
             let row: usize = i / TILE_SIZE;
             let pixel_index: usize = col + (row * 0x100) + row_offset;
             let pixel: u32 = self.tile_set.get_pixel(self.signed_tiles, tile_index, row, col, self.bg_palette);
-            self.background[pixel_index] = pixel;
+                self.background[pixel_index] = pixel;
+        }
+    }
+
+    fn redraw_background(&mut self) {
+        for i in 0..self.tile_addrs.len() {
+            self.map_background(i, self.tile_addrs[i] as usize);
         }
     }
 
